@@ -1,0 +1,33 @@
+-- ================================================================
+-- ESQUEMA CONSOLIDADO — Alexis Jofré ERP
+-- Fuente de verdad versionada: supabase/migrations/
+--
+-- En el SQL Editor de Supabase ejecutá EN ORDEN:
+--   1. migrations/001_initial_schema.sql
+--   2. migrations/002_functions_triggers.sql
+--   3. migrations/003_rls_policies.sql
+--   4. migrations/004_storage.sql
+--   5. migrations/005_config_grants_hardening.sql
+--
+-- No pegues este archivo como único script: las migraciones están
+-- pensadas para aplicarse de forma incremental y segura.
+-- ================================================================
+
+-- Tablas: usuarios, clientes, proveedores, tecnicos, productos,
+-- servicios, presupuestos, presupuesto_items, obras, obra_materiales,
+-- cobros, agenda, bitacora, audit_log, migracion_local, configuracion.
+--
+-- Roles (tabla public.usuarios, NO user_metadata):
+--   Administrador  → acceso completo
+--   Administrativo → operación comercial sin gestión de usuarios
+--   Técnico        → obras y visitas asignadas + consumo de materiales
+--
+-- Stock y cobros atómicos:
+--   public.consumir_material_obra(...)
+--   public.registrar_cobro(...)
+--   public.convertir_presupuesto_a_obra(...)
+--
+-- Storage privado: obra-fotos, comprobantes, documentos
+--
+-- Primer administrador (después de crear el usuario en Auth):
+--   UPDATE public.usuarios SET rol = 'Administrador' WHERE email = 'tu-correo@dominio.com';
