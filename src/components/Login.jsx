@@ -70,7 +70,7 @@ export default function Login() {
         {/* Header / Brand Logo */}
         <div className="text-center space-y-3">
           <div className="flex justify-center">
-            <img src="/logo.png" alt="Alexis Jofré Mantenimiento" className="h-20 w-auto object-contain" />
+            <img src="/logo-dark.png" alt="Alexis Jofré Mantenimiento" className="h-24 w-auto object-contain object-center" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-white tracking-wide">Sistema de Gestión</h1>

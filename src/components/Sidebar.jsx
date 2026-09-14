@@ -42,9 +42,9 @@ export default function Sidebar({ currentPage, setCurrentPage }) {
         {/* Brand / Logo */}
         <div className="pt-5 pb-3 px-3 border-b border-[#1E293B] flex items-center justify-center">
           <img
-            src="/logo.png"
+            src="/logo-dark.png"
             alt="Alexis Jofré Mantenimiento"
-            className="w-full max-w-[210px] h-auto object-contain"
+            className="w-40 h-auto object-contain object-center"
           />
         </div>
 

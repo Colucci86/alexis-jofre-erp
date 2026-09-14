@@ -23,6 +23,10 @@
 
 /* Printing styles for PDF generation */
 @media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
   body {
     background: white !important;
     color: black !important;

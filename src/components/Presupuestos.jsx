@@ -863,9 +863,9 @@ export default function Presupuestos() {
                 {/* Printable document */}
                 <div id="printable-presupuesto" className="bg-white text-black p-8 rounded-lg shadow-inner max-w-2xl mx-auto overflow-hidden text-xs print-card">
                   {/* Header */}
-                  <div className="flex justify-between items-start border-b border-gray-300 pb-6 mb-6">
+                  <div className="flex justify-between items-start border-b border-gray-200 pb-6 mb-6">
                     <div>
-                      <img src="/logo.png" alt="Logo" className="h-24 w-auto object-contain mb-1" />
+<img src="/logo.png" alt="Logo" className="h-32 w-auto object-contain object-center mb-1" />
                       <p className="text-gray-500 font-medium text-[11px]">{config.ciudad}</p>
                     </div>
                     <div className="text-right text-gray-600 space-y-1">
@@ -889,43 +889,45 @@ export default function Presupuestos() {
                   {/* Items table */}
                   <table className="w-full mb-8 text-left border-collapse">
                     <thead>
-                      <tr className="border-b border-gray-300 text-gray-500 font-bold bg-gray-50 text-[9px] uppercase tracking-wider">
-                        <th className="py-2.5 px-2 w-16">Cant.</th>
+                      <tr className="border-b border-gray-200 bg-gray-50 text-gray-500 font-semibold text-[10px] uppercase tracking-wider">
+                        <th className="py-2.5 px-2 text-right w-16">Cantidad</th>
                         <th className="py-2.5 px-2">Descripción</th>
-                        <th className="py-2.5 px-2 text-right w-28">P. Unitario</th>
-                        <th className="py-2.5 px-2 text-right w-28">Total</th>
+                        <th className="py-2.5 px-2 text-right w-32">Precio Unitario</th>
+                        <th className="py-2.5 px-2 text-right w-32">Subtotal</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {selectedPresupuesto.items.map((item, idx) => (
                         <tr key={idx}>
-                          <td className="py-2.5 px-2 font-medium text-gray-700">{item.cantidad}</td>
-                          <td className="py-2.5 px-2 text-gray-800 leading-normal">{item.descripcion}</td>
-                          <td className="py-2.5 px-2 text-right font-medium text-gray-600">${item.precioUnitario.toLocaleString('es-AR')}</td>
-                          <td className="py-2.5 px-2 text-right font-bold text-black">${item.total.toLocaleString('es-AR')}</td>
+                          <td className="py-3 px-2 text-right font-medium text-gray-700">{item.cantidad}</td>
+                          <td className="py-3 px-2 text-gray-800 leading-normal">{item.descripcion}</td>
+                          <td className="py-3 px-2 text-right font-medium text-gray-600">${item.precioUnitario.toLocaleString('es-AR')}</td>
+                          <td className="py-3 px-2 text-right font-semibold text-black">${item.total.toLocaleString('es-AR')}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
 
                   {/* Totals breakdown */}
-                  <div className="flex flex-col items-end gap-2 border-t border-gray-300 pt-4 mb-6">
-                    <div className="w-64 flex justify-between text-xs font-semibold text-gray-600">
-                      <span>SUBTOTAL</span>
-                      <span className="font-bold text-black">${selectedPresupuesto.subtotal.toLocaleString('es-AR')}</span>
+                  <div className="flex justify-end mb-6">
+                    <div className="w-72 bg-gray-50 border border-gray-200 rounded-md px-4 py-3 space-y-2">
+                      <div className="flex justify-between text-sm font-semibold text-gray-600">
+                        <span>SUBTOTAL</span>
+                        <span className="font-bold text-black">${selectedPresupuesto.subtotal.toLocaleString('es-AR')}</span>
+                      </div>
+                      {selectedPresupuesto.desgloseEfectivo > 0 && (
+                        <div className="flex justify-between text-sm font-medium text-gray-600">
+                          <span>EFECTIVO</span>
+                          <span className="font-semibold text-black">${selectedPresupuesto.desgloseEfectivo.toLocaleString('es-AR')}</span>
+                        </div>
+                      )}
+                      {selectedPresupuesto.desgloseCanje > 0 && (
+                        <div className="flex justify-between text-sm font-medium text-gray-600">
+                          <span>CANJE</span>
+                          <span className="font-semibold text-black">${selectedPresupuesto.desgloseCanje.toLocaleString('es-AR')}</span>
+                        </div>
+                      )}
                     </div>
-                    {selectedPresupuesto.desgloseEfectivo > 0 && (
-                      <div className="w-64 flex justify-between text-xs font-semibold text-gray-600">
-                        <span>EFECTIVO</span>
-                        <span className="font-bold text-black">${selectedPresupuesto.desgloseEfectivo.toLocaleString('es-AR')}</span>
-                      </div>
-                    )}
-                    {selectedPresupuesto.desgloseCanje > 0 && (
-                      <div className="w-64 flex justify-between text-xs font-semibold text-gray-700">
-                        <span>CANJE</span>
-                        <span className="font-extrabold text-blue-700">${selectedPresupuesto.desgloseCanje.toLocaleString('es-AR')}</span>
-                      </div>
-                    )}
                   </div>
 
                   {/* Terms */}
@@ -944,67 +946,70 @@ export default function Presupuestos() {
       {/* PRINT-ONLY VERSION */}
       {selectedPresupuesto && (
         <div className="hidden print-only text-black p-8 text-xs leading-normal">
-          <div className="flex justify-between items-start border-b pb-6 mb-6">
+          <div className="flex justify-between items-start border-b border-gray-200 pb-6 mb-6">
             <div>
-              <img src="/logo.png" alt="Logo" className="h-10 w-auto object-contain" />
+              <img src="/logo.png" alt="Logo" className="h-32 w-auto object-contain object-center mb-1" />
               <p className="text-gray-500 mt-1">{config.ciudad}</p>
             </div>
-            <div className="text-right text-gray-600">
-              <h3 className="font-bold text-base text-black">PRESUPUESTO</h3>
+            <div className="text-right text-gray-600 space-y-0.5">
+              <h3 className="font-bold text-sm text-black">PRESUPUESTO</h3>
               <p>N° {selectedPresupuesto.numero}</p>
               <p>Fecha: {new Date(selectedPresupuesto.fecha).toLocaleDateString('es-AR')}</p>
               <p>Tel: {config.telefono}</p>
               <p>{config.email}</p>
             </div>
           </div>
-          
-          <div className="bg-gray-100 p-4 border rounded mb-6">
-            <h4 className="font-bold">CLIENTE: {selectedPresupuesto.clienteNombre}</h4>
-            <p className="text-gray-600">{clientes.find(c => c.id === selectedPresupuesto.clienteId)?.direccion || ''}</p>
+
+          <div className="bg-gray-50 border border-gray-200 rounded-md p-4 mb-6">
+            <p className="font-bold text-gray-500 uppercase text-[9px] mb-1.5 tracking-wider">Cliente</p>
+            <h4 className="font-bold text-black text-sm">{selectedPresupuesto.clienteNombre}</h4>
+            <p className="text-gray-600 mt-1">{clientes.find(c => c.id === selectedPresupuesto.clienteId)?.direccion || ''}</p>
           </div>
 
           <table className="w-full mb-8 text-left border-collapse">
             <thead>
-              <tr className="border-b bg-gray-50">
-                <th className="py-2 px-1">Cant.</th>
-                <th className="py-2 px-1">Descripción</th>
-                <th className="py-2 px-1 text-right">P. Unitario</th>
-                <th className="py-2 px-1 text-right">Total</th>
+              <tr className="border-b border-gray-200 bg-gray-50 text-gray-500 font-semibold text-[10px] uppercase tracking-wider">
+                <th className="py-2.5 px-2 text-right w-16">Cantidad</th>
+                <th className="py-2.5 px-2">Descripción</th>
+                <th className="py-2.5 px-2 text-right w-32">Precio Unitario</th>
+                <th className="py-2.5 px-2 text-right w-32">Subtotal</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-100">
               {selectedPresupuesto.items.map((item, idx) => (
-                <tr key={idx} className="border-b">
-                  <td className="py-2 px-1">{item.cantidad}</td>
-                  <td className="py-2 px-1">{item.descripcion}</td>
-                  <td className="py-2 px-1 text-right">${item.precioUnitario.toLocaleString('es-AR')}</td>
-                  <td className="py-2 px-1 text-right">${item.total.toLocaleString('es-AR')}</td>
+                <tr key={idx}>
+                  <td className="py-3 px-2 text-right font-medium text-gray-700">{item.cantidad}</td>
+                  <td className="py-3 px-2 text-gray-800">{item.descripcion}</td>
+                  <td className="py-3 px-2 text-right font-medium text-gray-600">${item.precioUnitario.toLocaleString('es-AR')}</td>
+                  <td className="py-3 px-2 text-right font-semibold text-black">${item.total.toLocaleString('es-AR')}</td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          <div className="flex flex-col items-end gap-2 border-t pt-4">
-            <div className="w-64 flex justify-between font-bold">
-              <span>SUBTOTAL:</span>
-              <span>${selectedPresupuesto.subtotal.toLocaleString('es-AR')}</span>
+          <div className="flex justify-end mb-8">
+            <div className="w-72 bg-gray-50 border border-gray-200 rounded-md px-4 py-3 space-y-2">
+              <div className="flex justify-between text-sm font-semibold text-gray-600">
+                <span>SUBTOTAL</span>
+                <span className="font-bold text-black">${selectedPresupuesto.subtotal.toLocaleString('es-AR')}</span>
+              </div>
+              {selectedPresupuesto.desgloseEfectivo > 0 && (
+                <div className="flex justify-between text-sm font-medium text-gray-600">
+                  <span>EFECTIVO</span>
+                  <span className="font-semibold text-black">${selectedPresupuesto.desgloseEfectivo.toLocaleString('es-AR')}</span>
+                </div>
+              )}
+              {selectedPresupuesto.desgloseCanje > 0 && (
+                <div className="flex justify-between text-sm font-medium text-gray-600">
+                  <span>CANJE</span>
+                  <span className="font-semibold text-black">${selectedPresupuesto.desgloseCanje.toLocaleString('es-AR')}</span>
+                </div>
+              )}
             </div>
-            {selectedPresupuesto.desgloseEfectivo > 0 && (
-              <div className="w-64 flex justify-between">
-                <span>EFECTIVO:</span>
-                <span>${selectedPresupuesto.desgloseEfectivo.toLocaleString('es-AR')}</span>
-              </div>
-            )}
-            {selectedPresupuesto.desgloseCanje > 0 && (
-              <div className="w-64 flex justify-between font-bold text-blue-600">
-                <span>CANJE:</span>
-                <span>${selectedPresupuesto.desgloseCanje.toLocaleString('es-AR')}</span>
-              </div>
-            )}
           </div>
 
-          <div className="mt-8 italic text-gray-500 border-t pt-4 text-[10px]">
-            <p className="font-bold text-gray-700">Condiciones de pago:</p>
+          <div className="italic text-gray-500 border-t border-gray-200 pt-4 text-[10px] leading-relaxed">
+            <p className="font-semibold text-gray-700 not-italic mb-1">Condiciones de pago:</p>
             <p>{selectedPresupuesto.observaciones}</p>
           </div>
         </div>
