@@ -8,6 +8,9 @@
 --   3. migrations/003_rls_policies.sql
 --   4. migrations/004_storage.sql
 --   5. migrations/005_config_grants_hardening.sql
+--   6. migrations/006_tecnicos_tipo.sql
+--   7. migrations/007_obras_eliminacion_logica.sql
+--   8. migrations/008_bitacora_created_at.sql
 --
 -- No pegues este archivo como único script: las migraciones están
 -- pensadas para aplicarse de forma incremental y segura.

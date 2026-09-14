@@ -27,65 +27,76 @@ export default function Estadisticas() {
   const [periodo, setPeriodo] = useState('Este año');
 
   // Calculations
-  const ingresos = cobros.filter(c => c.tipo === 'Ingreso').reduce((acc, curr) => acc + curr.importe, 0);
-  const egresos = cobros.filter(c => c.tipo === 'Egreso').reduce((acc, curr) => acc + curr.importe, 0);
+  const ingresos = cobros.filter(c => c.tipo === 'Ingreso').reduce((acc, curr) => acc + Number(curr.importe || 0), 0);
+  const egresos = cobros.filter(c => c.tipo === 'Egreso').reduce((acc, curr) => acc + Number(curr.importe || 0), 0);
   const balance = ingresos - egresos;
 
-  // Monthly balance data (simulated/aggregated)
-  const monthlyData = [
-    { name: 'Ene', Ingresos: 320000, Egresos: 120000 },
-    { name: 'Feb', Ingresos: 450000, Egresos: 150000 },
-    { name: 'Mar', Ingresos: 680000, Egresos: 210000 },
-    { name: 'Abr', Ingresos: 730000, Egresos: 180000 },
-    { name: 'May', Ingresos: 800000, Egresos: 250000 },
-    { name: 'Jun', Ingresos: 850000, Egresos: 320000 }
-  ];
+  // Monthly balance data
+  const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const now = new Date();
+  const monthlyData = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+    const month = d.getMonth();
+    const year = d.getFullYear();
+    const monthCobros = cobros.filter(c => {
+      if (!c.fecha) return false;
+      const [y, m] = c.fecha.split('-').map(Number);
+      return y === year && m === month + 1;
+    });
+    return {
+      name: monthNames[month],
+      Ingresos: monthCobros.filter(c => c.tipo === 'Ingreso').reduce((acc, c) => acc + Number(c.importe || 0), 0),
+      Egresos: monthCobros.filter(c => c.tipo === 'Egreso').reduce((acc, c) => acc + Number(c.importe || 0), 0),
+    };
+  });
 
   // Budget status breakdown
   const budgetStatuses = [
     { name: 'Aceptados', value: presupuestos.filter(p => p.estado === 'Aceptado').length, color: '#10B981' },
     { name: 'Enviados/Pendientes', value: presupuestos.filter(p => p.estado === 'Enviado' || p.estado === 'Pendiente').length, color: '#F59E0B' },
-    { name: 'Rechazados/Vencidos', value: presupuestos.filter(p => p.estado === 'Rechazado' || p.estado === 'Vencido').length || 1, color: '#EF4444' }
+    { name: 'Rechazados/Vencidos', value: presupuestos.filter(p => p.estado === 'Rechazado' || p.estado === 'Vencido').length, color: '#EF4444' }
   ];
 
   // Work Categories distribution
   const obraCategories = [
-    { name: 'Electricidad', value: obras.filter(o => o.tipoTrabajo === 'Electricidad').length || 2, color: '#3B82F6' },
-    { name: 'Durlock', value: obras.filter(o => o.tipoTrabajo === 'Durlock').length || 1, color: '#10B981' },
-    { name: 'Pintura', value: obras.filter(o => o.tipoTrabajo === 'Pintura').length || 1, color: '#EC4899' },
-    { name: 'Remodelaciones', value: obras.filter(o => o.tipoTrabajo === 'Remodelación').length || 1, color: '#F59E0B' }
+    { name: 'Electricidad', value: obras.filter(o => o.tipoTrabajo === 'Electricidad').length, color: '#3B82F6' },
+    { name: 'Durlock', value: obras.filter(o => o.tipoTrabajo === 'Durlock').length, color: '#10B981' },
+    { name: 'Pintura', value: obras.filter(o => o.tipoTrabajo === 'Pintura').length, color: '#EC4899' },
+    { name: 'Remodelaciones', value: obras.filter(o => o.tipoTrabajo === 'Remodelación').length, color: '#F59E0B' }
   ];
 
   return (
     <div className="space-y-6">
       
-      {/* HEADER SECTION */}
-      <div className="flex justify-between items-center">
+      {/* HEADER & CONTROLS */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-white">Estadísticas y Reportes</h2>
-          <p className="text-gray-400 text-sm">Visualiza el rendimiento financiero y operativo de Alexis Jofré Mantenimiento.</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-white">Estadísticas y Reportes</h2>
+          <p className="text-gray-400 text-xs sm:text-sm hidden sm:block">Análisis comercial, financiero y métricas de desempeño.</p>
         </div>
 
-        {/* Period picker */}
-        <div className="flex bg-[#1E293B] p-1 rounded-lg border border-[#334155]">
-          {['Este mes', 'Este año', 'Histórico'].map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriodo(p)}
-              className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                periodo === p 
-                  ? 'bg-blue-600 text-white' 
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              {p}
-            </button>
-          ))}
+        {/* Period Selector - Scrollable on mobile */}
+        <div className="overflow-x-auto scrollbar-hide -mx-1 px-1 w-full sm:w-auto">
+          <div className="flex bg-[#1E293B] p-1 rounded-lg border border-[#334155] self-start w-max">
+            {['Este mes', 'Este año', 'Histórico'].map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriodo(p)}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
+                  periodo === p 
+                    ? 'bg-blue-600 text-white shadow-sm' 
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Main KPI blocks */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* KPI STATS */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-[#1E293B] p-5 rounded-xl border border-[#334155] shadow-lg text-center">
           <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Facturación Total</p>
           <h3 className="text-xl font-black text-white mt-1">${ingresos.toLocaleString('es-AR')}</h3>

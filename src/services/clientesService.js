@@ -91,6 +91,7 @@ export async function addClienteBitacora(clienteId, entry, usuarioNombre) {
     descripcion: entry.descripcion,
     foto_url: entry.fotoUrl || null,
     usuario_nombre: usuarioNombre || user?.email || 'Sistema',
+    ...(entry.fecha ? { fecha: entry.fecha } : {}),
   });
 
   const serviceError = handleSupabaseError(error);

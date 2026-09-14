@@ -9,6 +9,7 @@ export function mapBitacoraRow(row) {
     descripcion: row.descripcion,
     usuario: row.usuario_nombre || row.usuario || 'Sistema',
     fotoUrl: row.foto_url || '',
+    createdAt: row.created_at || row.fecha || null,
   };
 }
 
@@ -90,6 +91,7 @@ export function mapTecnicoRow(row) {
     email: row.email || '',
     especialidad: row.especialidad || '',
     estado: row.estado || 'Activo',
+    tipo: row.tipo || 'Técnico',
     notas: row.notas || '',
     usuarioId: row.usuario_id || null,
   };
@@ -104,6 +106,7 @@ export function mapTecnicoToDb(tecnico) {
     email: tecnico.email || null,
     especialidad: tecnico.especialidad || null,
     estado: tecnico.estado || 'Activo',
+    tipo: tecnico.tipo || 'Técnico',
     notas: tecnico.notas || null,
     usuario_id: tecnico.usuarioId || null,
   };
@@ -158,8 +161,6 @@ export function mapServicioRow(row) {
     descripcion: row.descripcion || '',
     precioBase: Number(row.precio_base || 0),
     unidad: row.unidad || 'unidad',
-    duracionEstimada: row.duracion_estimada || '',
-    costoManoObra: Number(row.costo_mano_obra || 0),
     estado: row.estado || 'Activo',
   };
 }
@@ -171,8 +172,6 @@ export function mapServicioToDb(servicio) {
     descripcion: servicio.descripcion || null,
     precio_base: Number(servicio.precioBase || 0),
     unidad: servicio.unidad || 'unidad',
-    duracion_estimada: servicio.duracionEstimada || null,
-    costo_mano_obra: Number(servicio.costoManoObra || 0),
     estado: servicio.estado || 'Activo',
   };
 }
@@ -247,6 +246,7 @@ export function mapObraRow(row, materiales = [], pagos = [], bitacora = []) {
     importePendiente: Number(row.importe_pendiente || 0),
     formaPago: row.forma_pago || 'Efectivo',
     observaciones: row.observaciones || '',
+    eliminada: row.eliminada === true,
     materialesUsados: materiales.map(mapObraMaterialRow),
     pagosRegistrados: pagos.map(mapCobroAsPagoRow),
     bitacora: bitacora.map(mapBitacoraRow),
@@ -284,6 +284,7 @@ export function mapObraToDb(obra) {
     importe_pendiente: Number(obra.importePendiente || 0),
     forma_pago: obra.formaPago || 'Efectivo',
     observaciones: obra.observaciones || null,
+    ...(obra.eliminada === true ? { eliminada: true } : {}),
   };
 }
 

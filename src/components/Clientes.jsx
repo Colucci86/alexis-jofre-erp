@@ -16,8 +16,17 @@ import {
   ChevronRight,
   BookOpen,
   Send,
+  Pencil,
   Calendar
 } from 'lucide-react';
+
+/** Devuelve la cadena YYYY-MM-DD de una fecha local (sin conversión UTC) */
+function toLocalDateString(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 export default function Clientes() {
   const emptyCliente = {
@@ -35,12 +44,14 @@ export default function Clientes() {
     createCliente,
     saveCliente,
     removeCliente,
-    addClienteBitacora 
+    addClienteBitacora,
+    updateBitacoraEntrada
   } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCliente, setSelectedCliente] = useState(null);
   const [activeTab, setActiveTab] = useState('Resumen');
+  const [mobileView, setMobileView] = useState('list'); // 'list' | 'detail'
   
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -53,6 +64,14 @@ export default function Clientes() {
     descripcion: '',
     fotoUrl: ''
   });
+  const [bitacoraFecha, setBitacoraFecha] = useState(toLocalDateString());
+  const [bitacoraHora, setBitacoraHora] = useState(
+    () => new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  );
+
+  // Edit existing bitacora entry state
+  const [editingBitacoraId, setEditingBitacoraId] = useState(null);
+  const [editBitacoraData, setEditBitacoraData] = useState({ fecha: '', hora: '' });
 
   useEffect(() => {
     if (!selectedCliente) return;
@@ -105,6 +124,11 @@ export default function Clientes() {
   };
 
   const handleDeleteCliente = async (id) => {
+    const hasObras = obras.some(o => o.clienteId === id);
+    const hasPresupuestos = presupuestos.some(p => p.clienteId === id);
+    if (hasObras || hasPresupuestos) {
+      return alert('No se puede eliminar el cliente porque tiene presupuestos u obras asociadas.');
+    }
     if (!window.confirm('¿Está seguro de que desea eliminar este cliente por completo? Esta acción no se puede deshacer.')) return;
     try {
       await removeCliente(id);
@@ -118,11 +142,14 @@ export default function Clientes() {
     e.preventDefault();
     if (!newBitacoraEntry.descripcion) return;
 
+    const fechaISO = new Date(`${bitacoraFecha}T${bitacoraHora || '00:00'}:00`).toISOString();
+
     try {
       await addClienteBitacora(selectedCliente.id, {
         tipo: newBitacoraEntry.tipo,
         descripcion: newBitacoraEntry.descripcion,
-        fotoUrl: newBitacoraEntry.fotoUrl
+        fotoUrl: newBitacoraEntry.fotoUrl,
+        fecha: fechaISO
       });
       setNewBitacoraEntry({
         tipo: 'Nota Manual',
@@ -131,6 +158,29 @@ export default function Clientes() {
       });
     } catch (err) {
       alert(err.message || 'No se pudo agregar la nota.');
+    }
+  };
+
+  const startEditEntry = (b) => {
+    setEditingBitacoraId(b.id);
+    const d = new Date(b.fecha);
+    if (Number.isNaN(d.getTime())) {
+      setEditBitacoraData({ fecha: toLocalDateString(), hora: '00:00' });
+      return;
+    }
+    setEditBitacoraData({
+      fecha: toLocalDateString(d),
+      hora: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
+    });
+  };
+
+  const handleSaveEntryEdit = async (b) => {
+    const fechaISO = new Date(`${editBitacoraData.fecha}T${editBitacoraData.hora || '00:00'}:00`).toISOString();
+    try {
+      await updateBitacoraEntrada('cliente', selectedCliente.id, b.id, { fecha: fechaISO });
+      setEditingBitacoraId(null);
+    } catch (err) {
+      alert(err.message || 'No se pudo actualizar la entrada.');
     }
   };
 
@@ -151,28 +201,30 @@ export default function Clientes() {
   const totalPendiente = clientObras.reduce((acc, curr) => acc + Number(curr.importePendiente), 0);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[calc(100vh-10rem)]">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 min-h-[calc(100vh-10rem)]">
       
-      {/* LEFT COLUMN: LIST OF CLIENTS (lg:col-span-5) */}
-      <div className="lg:col-span-5 bg-[#1E293B] rounded-xl border border-[#334155] p-6 flex flex-col justify-between shadow-lg">
+      {/* LEFT COLUMN: LIST OF CLIENTS */}
+      <div className={`lg:col-span-5 bg-[#1E293B] rounded-xl border border-[#334155] p-4 sm:p-6 flex flex-col shadow-lg ${
+        mobileView === 'detail' ? 'hidden lg:flex' : 'flex'
+      }`}>
         <div>
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-white">Clientes</h3>
+          <div className="flex justify-between items-center mb-4 sm:mb-6">
+            <h3 className="text-base sm:text-lg font-bold text-white">Clientes</h3>
             <button
               onClick={openCreateCliente}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-colors"
             >
               <Plus className="w-4 h-4" />
-              Nuevo Cliente
+              Nuevo
             </button>
           </div>
 
           {/* Search bar */}
-          <div className="relative mb-4">
+          <div className="relative mb-3 sm:mb-4">
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
             <input
               type="text"
-              placeholder="Buscar cliente, empresa o dirección..."
+              placeholder="Buscar cliente..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-[#0F1729] border border-[#334155] rounded-lg pl-9 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
@@ -180,38 +232,37 @@ export default function Clientes() {
           </div>
 
           {/* Client List */}
-          <div className="space-y-2 overflow-y-auto max-h-[500px] pr-1">
+          <div className="space-y-2 overflow-y-auto max-h-[420px] sm:max-h-[500px] pr-1">
             {filteredClientes.length === 0 ? (
               <p className="text-gray-500 text-sm text-center py-8">No se encontraron clientes.</p>
             ) : (
               filteredClientes.map((c) => (
                 <div
                   key={c.id}
-                  onClick={() => { setSelectedCliente(c); setActiveTab('Resumen'); }}
-                  className={`p-4 rounded-lg border transition-all cursor-pointer flex items-center justify-between ${
+                  onClick={() => { setSelectedCliente(c); setActiveTab('Resumen'); setMobileView('detail'); }}
+                  className={`p-3 sm:p-4 rounded-lg border transition-all cursor-pointer flex items-center justify-between ${
                     selectedCliente?.id === c.id 
                       ? 'bg-[#16223F] border-blue-500 shadow-md' 
                       : 'bg-[#111827]/60 border-[#334155] hover:bg-[#16223F]/40'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-900/50 border border-blue-500/30 flex items-center justify-center font-bold text-blue-400 text-sm">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-blue-900/50 border border-blue-500/30 flex items-center justify-center font-bold text-blue-400 text-xs sm:text-sm shrink-0">
                       {c.nombre.split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
                     </div>
-                    <div>
-                      <h4 className="font-semibold text-white text-sm">{c.nombre}</h4>
+                    <div className="min-w-0">
+                      <h4 className="font-semibold text-white text-sm truncate">{c.nombre}</h4>
                       {c.empresa && c.empresa !== 'Particular' && (
-                        <p className="text-xs text-blue-400 font-medium">{c.empresa}</p>
+                        <p className="text-xs text-blue-400 font-medium truncate">{c.empresa}</p>
                       )}
-                      <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                      <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1 truncate">
                         <MapPin className="w-3 h-3 text-gray-500 shrink-0" />
-                        {c.direccion}
+                        <span className="truncate">{c.direccion}</span>
                       </p>
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-2">
-                    {/* WhatsApp link */}
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                     {c.whatsapp && (
                       <a 
                         href={`https://wa.me/${c.whatsapp.replace(/\D/g, '')}`} 
@@ -224,14 +275,13 @@ export default function Clientes() {
                         <MessageSquare className="w-4 h-4" />
                       </a>
                     )}
-                    {/* Maps link */}
                     {c.direccion && (
                       <a 
                         href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(c.direccion + ', ' + c.localidad + ', ' + c.provincia)}`} 
                         target="_blank" 
                         rel="noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="p-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-md transition-colors"
+                        className="p-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-md transition-colors hidden sm:flex"
                         title="Ver en Google Maps"
                       >
                         <MapPin className="w-4 h-4" />
@@ -246,68 +296,82 @@ export default function Clientes() {
         </div>
       </div>
 
-      {/* RIGHT COLUMN: CLIENT FILE & BITACORA (lg:col-span-7) */}
-      <div className="lg:col-span-7">
+      {/* RIGHT COLUMN: CLIENT FILE & BITACORA */}
+      <div className={`lg:col-span-7 ${
+        mobileView === 'list' && !selectedCliente ? 'hidden lg:block' : 
+        mobileView === 'list' ? 'hidden lg:block' : 'block'
+      }`}>
         {!selectedCliente ? (
           <div className="bg-[#1E293B] rounded-xl border border-[#334155] p-6 h-full flex flex-col items-center justify-center text-center shadow-lg text-gray-500">
             <BookOpen className="w-12 h-12 mb-3 text-gray-600" />
             <p className="text-sm">Selecciona un cliente de la lista para ver su ficha de detalle, bitácora y estado financiero.</p>
           </div>
         ) : (
-          <div className="bg-[#1E293B] rounded-xl border border-[#334155] overflow-hidden shadow-lg flex flex-col justify-between h-full">
+          <div className="bg-[#1E293B] rounded-xl border border-[#334155] overflow-hidden shadow-lg flex flex-col h-full">
+            {/* Back button on mobile */}
+            <div className="lg:hidden p-3 border-b border-[#334155] bg-[#111827]/40">
+              <button
+                onClick={() => { setMobileView('list'); }}
+                className="flex items-center gap-2 text-blue-400 text-xs font-semibold"
+              >
+                <ChevronRight className="w-4 h-4 rotate-180" /> Volver a la lista
+              </button>
+            </div>
             {/* Header info */}
-            <div className="p-6 border-b border-[#334155] bg-[#111827]/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-3">
-                  <h3 className="text-xl font-bold text-white">{selectedCliente.nombre}</h3>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    selectedCliente.estado === 'Activo' ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'
-                  }`}>
-                    {selectedCliente.estado}
-                  </span>
+            <div className="p-4 sm:p-6 border-b border-[#334155] bg-[#111827]/40 flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-lg sm:text-xl font-bold text-white truncate">{selectedCliente.nombre}</h3>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                      selectedCliente.estado === 'Activo' ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'
+                    }`}>
+                      {selectedCliente.estado}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1">{selectedCliente.empresa || 'Particular'}</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-3 text-xs text-gray-300">
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                      <span>{selectedCliente.telefono}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                      <span className="truncate">{selectedCliente.email || 'Sin correo'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 sm:col-span-2">
+                      <MapPin className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                      <span className="truncate">{selectedCliente.direccion}, {selectedCliente.localidad}</span>
+                    </div>
+                  </div>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">{selectedCliente.empresa || 'Particular'}</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4 text-xs text-gray-300">
-                  <div className="flex items-center gap-2">
-                    <Phone className="w-3.5 h-3.5 text-gray-500" />
-                    <span>{selectedCliente.telefono}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Mail className="w-3.5 h-3.5 text-gray-500" />
-                    <span>{selectedCliente.email || 'Sin correo registrado'}</span>
-                  </div>
-                  <div className="flex items-center gap-2 md:col-span-2">
-                    <MapPin className="w-3.5 h-3.5 text-gray-500" />
-                    <span>{selectedCliente.direccion}, {selectedCliente.localidad}</span>
-                  </div>
+                
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => openEditCliente(selectedCliente)}
+                    className="flex items-center gap-1 text-blue-300 hover:text-white hover:bg-blue-600/30 border border-blue-500/30 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Editar</span>
+                  </button>
+                  <button 
+                    onClick={() => handleDeleteCliente(selectedCliente.id)}
+                    className="flex items-center gap-1 text-red-400 hover:text-white hover:bg-red-600/30 border border-red-500/30 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Eliminar</span>
+                  </button>
                 </div>
-              </div>
-              
-              <div className="flex items-center gap-2 self-start md:self-center">
-                <button
-                  onClick={() => openEditCliente(selectedCliente)}
-                  className="flex items-center gap-2 text-blue-300 hover:text-white hover:bg-blue-600/30 border border-blue-500/30 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all"
-                >
-                  <Edit2 className="w-4 h-4" />
-                  Editar
-                </button>
-                <button 
-                  onClick={() => handleDeleteCliente(selectedCliente.id)}
-                  className="flex items-center gap-2 text-red-400 hover:text-white hover:bg-red-600/30 border border-red-500/30 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Eliminar Ficha
-                </button>
               </div>
             </div>
 
             {/* Navigation Tabs */}
-            <div className="flex border-b border-[#334155] bg-[#111827]/20">
+            <div className="flex border-b border-[#334155] bg-[#111827]/20 overflow-x-auto">
               {['Resumen', 'Presupuestos', 'Obras', 'Bitácora'].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`px-6 py-3.5 text-xs font-semibold border-b-2 transition-all ${
+                  className={`px-4 sm:px-6 py-3 sm:py-3.5 text-xs font-semibold border-b-2 transition-all whitespace-nowrap ${
                     activeTab === tab 
                       ? 'border-blue-500 text-white bg-[#1E293B]' 
                       : 'border-transparent text-gray-400 hover:text-white hover:bg-[#16223F]/30'
@@ -319,7 +383,7 @@ export default function Clientes() {
             </div>
 
             {/* TAB CONTENT */}
-            <div className="p-6 flex-1 overflow-y-auto max-h-[450px]">
+            <div className="p-4 sm:p-6 flex-1 overflow-y-auto max-h-[380px] sm:max-h-[450px]">
               
               {/* SUBTAB: RESUMEN */}
               {activeTab === 'Resumen' && (
@@ -448,6 +512,28 @@ export default function Clientes() {
                       </div>
 
                       <div>
+                        <label className="block text-[11px] font-semibold text-gray-400 mb-1">Fecha del evento</label>
+                        <input
+                          type="date"
+                          value={bitacoraFecha}
+                          onChange={(e) => setBitacoraFecha(e.target.value)}
+                          className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-gray-400 mb-1">Hora</label>
+                        <input
+                          type="time"
+                          value={bitacoraHora}
+                          onChange={(e) => setBitacoraHora(e.target.value)}
+                          className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
                         <label className="block text-[11px] font-semibold text-gray-400 mb-1">Adjunto Opcional (URL / Archivo)</label>
                         <input
                           type="text"
@@ -491,8 +577,46 @@ export default function Clientes() {
                           </span>
                           <div className="bg-[#111827]/60 p-3 rounded-lg border border-[#334155]">
                             <div className="flex items-center justify-between text-[10px] text-gray-400">
-                              <span className="font-bold uppercase tracking-wider text-blue-400">{b.tipo}</span>
-                              <span>{new Date(b.fecha).toLocaleString('es-AR')}</span>
+                              <span className="flex items-center gap-2">
+                                <span className="font-bold uppercase tracking-wider text-blue-400">{b.tipo}</span>
+                                <button
+                                  onClick={() => startEditEntry(b)}
+                                  title="Corregir fecha/hora"
+                                  className="text-gray-500 hover:text-blue-400"
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </button>
+                              </span>
+                              {editingBitacoraId === b.id ? (
+                                <span className="flex items-center gap-2">
+                                  <input
+                                    type="date"
+                                    value={editBitacoraData.fecha}
+                                    onChange={(e) => setEditBitacoraData(prev => ({ ...prev, fecha: e.target.value }))}
+                                    className="bg-[#0F1729] border border-[#334155] rounded px-2 py-1 text-[10px] text-white focus:outline-none"
+                                  />
+                                  <input
+                                    type="time"
+                                    value={editBitacoraData.hora}
+                                    onChange={(e) => setEditBitacoraData(prev => ({ ...prev, hora: e.target.value }))}
+                                    className="bg-[#0F1729] border border-[#334155] rounded px-2 py-1 text-[10px] text-white focus:outline-none"
+                                  />
+                                  <button
+                                    onClick={() => handleSaveEntryEdit(b)}
+                                    className="text-blue-400 hover:text-blue-300 font-bold"
+                                  >
+                                    Guardar
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingBitacoraId(null)}
+                                    className="text-gray-400 hover:text-red-400"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </span>
+                              ) : (
+                                <span>{new Date(b.fecha).toLocaleString('es-AR')}</span>
+                              )}
                             </div>
                             <p className="text-xs text-gray-200 mt-2">{b.descripcion}</p>
                             {b.fotoUrl && (
@@ -515,21 +639,21 @@ export default function Clientes() {
 
       {/* QUICK CLIENT CREATION MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-[#1E293B] border border-[#334155] rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-[#334155] flex justify-between items-center bg-[#111827]/40">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+          <div className="bg-[#1E293B] border border-[#334155] rounded-t-2xl sm:rounded-2xl w-full sm:max-w-xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:fade-in sm:zoom-in-95 duration-200">
+            <div className="p-4 sm:p-6 border-b border-[#334155] flex justify-between items-center bg-[#111827]/40">
               <div>
-                <h3 className="font-bold text-white text-base">{editingClienteId ? 'Editar Cliente' : 'Nuevo Cliente'}</h3>
-                <p className="text-xs text-gray-400">
+                <h3 className="font-bold text-white text-sm sm:text-base">{editingClienteId ? 'Editar Cliente' : 'Nuevo Cliente'}</h3>
+                <p className="text-xs text-gray-400 hidden sm:block">
                   {editingClienteId ? 'Actualizá los datos de la ficha' : 'Rellena los datos para el alta de cliente'}
                 </p>
               </div>
-              <button onClick={() => { setIsModalOpen(false); setEditingClienteId(null); }} className="text-gray-400 hover:text-white p-1 rounded-lg">
+              <button onClick={() => { setIsModalOpen(false); setEditingClienteId(null); }} className="text-gray-400 hover:text-white p-2 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateCliente} className="p-6 space-y-4">
+            <form onSubmit={handleCreateCliente} className="p-4 sm:p-6 space-y-3 sm:space-y-4 overflow-y-auto max-h-[75vh] sm:max-h-[80vh]">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 mb-1">Nombre Completo *</label>

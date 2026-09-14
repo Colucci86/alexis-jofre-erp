@@ -7,10 +7,11 @@ import {
   Briefcase, 
   DollarSign, 
   Package, 
-  Truck, 
   Wrench, 
+  Truck, 
   BarChart3, 
   Settings,
+  HardHat,
   LogOut
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -26,6 +27,7 @@ export default function Sidebar({ currentPage, setCurrentPage }) {
     { id: 'obras', name: 'Obras', pageName: 'Obras', icon: Briefcase },
     { id: 'cobros', name: 'Cobros', pageName: 'Cobros', icon: DollarSign },
     { id: 'stock', name: 'Stock', pageName: 'Stock', icon: Package },
+    { id: 'servicios', name: 'Servicios', pageName: 'Servicios', icon: HardHat },
     { id: 'proveedores', name: 'Proveedores', pageName: 'Proveedores', icon: Truck },
     { id: 'tecnicos', name: 'Técnicos', pageName: 'Técnicos', icon: Wrench },
     { id: 'estadisticas', name: 'Estadísticas', pageName: 'Estadísticas', icon: BarChart3 },

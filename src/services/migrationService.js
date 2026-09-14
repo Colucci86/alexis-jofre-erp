@@ -142,6 +142,7 @@ export async function importLocalSnapshot(snapshot, { allowIfRemoteHasData = fal
       email: t.email || null,
       especialidad: t.especialidad || null,
       estado: t.estado || 'Activo',
+      tipo: t.tipo || 'Técnico',
       notas: t.notas || null,
     };
   });
@@ -247,6 +248,7 @@ export async function importLocalSnapshot(snapshot, { allowIfRemoteHasData = fal
       importe_pendiente: Number(o.importePendiente || 0),
       forma_pago: o.formaPago || 'Efectivo',
       observaciones: o.observaciones || null,
+      eliminada: Boolean(o.eliminada),
     };
   });
   await insertMany('obras', obraRows);

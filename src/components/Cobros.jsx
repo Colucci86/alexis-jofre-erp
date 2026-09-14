@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { 
+import {
   Plus, 
   Search, 
   DollarSign, 
@@ -8,15 +8,14 @@ import {
   ArrowDownRight, 
   X,
   FileText,
-  Calendar,
-  Layers,
-  Sparkles
+  Trash2
 } from 'lucide-react';
 
 export default function Cobros() {
   const { 
     cobros, 
     addCobro, 
+    removeCobro,
     clientes, 
     proveedores, 
     obras, 
@@ -93,6 +92,15 @@ export default function Cobros() {
     setIsModalOpen(false);
   };
 
+  const handleDeleteTransaction = async (c) => {
+    if (!window.confirm(`¿Eliminar el registro de ${c.tipo === 'Ingreso' ? 'ingreso' : 'egreso'} "${c.concepto}" por $${c.importe.toLocaleString('es-AR')}? Esta acción no se puede deshacer.`)) return;
+    try {
+      await removeCobro(c.id);
+    } catch (err) {
+      alert(err.message || 'No se pudo eliminar el movimiento.');
+    }
+  };
+
   // Filter list
   const filteredList = cobros.filter(c => {
     const isCorrectType = activeTab === 'Ingresos' ? c.tipo === 'Ingreso' : c.tipo === 'Egreso';
@@ -115,10 +123,10 @@ export default function Cobros() {
     <div className="space-y-6">
       
       {/* HEADER SECTION */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-white">Cobros y Finanzas</h2>
-          <p className="text-gray-400 text-sm">Gestiona el flujo de caja, egresos de materiales e ingresos de obras.</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-white">Cobros y Finanzas</h2>
+          <p className="text-gray-400 text-xs sm:text-sm hidden sm:block">Gestiona el flujo de caja, egresos de materiales e ingresos de obras.</p>
         </div>
         <button
           onClick={() => {
@@ -126,13 +134,13 @@ export default function Cobros() {
               ...prev,
               clienteId: clientes[0]?.id || '',
               proveedorId: proveedores[0]?.id || '',
-              obraId: obras[0]?.id || ''
+              obraId: ''
             }));
             setIsModalOpen(true);
           }}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-lg shadow-blue-900/20"
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-colors shadow-lg shadow-blue-900/20 text-xs sm:text-sm shrink-0"
         >
-          <Plus className="w-5 h-5" />
+          <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
           {activeTab === 'Ingresos' ? 'Nuevo Ingreso' : 'Nuevo Egreso'}
         </button>
       </div>
@@ -175,14 +183,14 @@ export default function Cobros() {
       {/* Main content box */}
       <div className="bg-[#1E293B] border border-[#334155] rounded-xl overflow-hidden shadow-lg">
         
-        {/* Navigation Tabs */}
-        <div className="flex border-b border-[#334155] bg-[#111827]/40 justify-between items-center px-6">
-          <div className="flex">
+        {/* Navigation Tabs & Search bar */}
+        <div className="flex flex-col sm:flex-row border-b border-[#334155] bg-[#111827]/40 justify-between items-stretch sm:items-center px-3 sm:px-6 gap-2 py-2 sm:py-0">
+          <div className="flex border-b sm:border-b-0 border-[#334155]">
             {['Ingresos', 'Egresos'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => { setActiveTab(tab); setSearchTerm(''); }}
-                className={`px-6 py-4 text-xs font-semibold border-b-2 transition-all ${
+                className={`px-4 sm:px-6 py-2.5 sm:py-4 text-xs font-semibold border-b-2 transition-all ${
                   activeTab === tab 
                     ? 'border-blue-500 text-white bg-[#1E293B]' 
                     : 'border-transparent text-gray-400 hover:text-white'
@@ -194,7 +202,7 @@ export default function Cobros() {
           </div>
 
           {/* Search tool */}
-          <div className="relative w-64 my-2">
+          <div className="relative w-full sm:w-64 my-1 sm:my-2">
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
             <input
               type="text"
@@ -218,12 +226,13 @@ export default function Cobros() {
                 <th className="p-4">Forma de Pago</th>
                 {activeTab === 'Egresos' && <th className="p-4">Comprobante</th>}
                 <th className="p-4 text-right">Importe</th>
+                <th className="p-4 text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#334155] text-gray-300">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={activeTab === 'Ingresos' ? 6 : 7} className="p-8 text-center text-gray-500">
+                  <td colSpan={activeTab === 'Ingresos' ? 7 : 8} className="p-8 text-center text-gray-500">
                     No hay transacciones registradas.
                   </td>
                 </tr>
@@ -272,6 +281,15 @@ export default function Cobros() {
                     <td className={`p-4 text-right font-bold text-sm ${activeTab === 'Ingresos' ? 'text-green-400' : 'text-red-400'}`}>
                       {activeTab === 'Ingresos' ? '+' : '-'}${c.importe.toLocaleString('es-AR')}
                     </td>
+                    <td className="p-4 text-center whitespace-nowrap">
+                      <button
+                        onClick={() => handleDeleteTransaction(c)}
+                        className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+                        title="Eliminar registro"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -283,19 +301,19 @@ export default function Cobros() {
 
       {/* NEW TRANSACTION MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-[#1E293B] border border-[#334155] rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-[#334155] flex justify-between items-center bg-[#111827]/40">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+          <div className="bg-[#1E293B] border border-[#334155] rounded-t-2xl sm:rounded-2xl w-full sm:max-w-xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:fade-in sm:zoom-in-95 duration-200">
+            <div className="p-4 sm:p-6 border-b border-[#334155] flex justify-between items-center bg-[#111827]/40">
               <div>
-                <h3 className="font-bold text-white text-base">Registrar {activeTab === 'Ingresos' ? 'Ingreso' : 'Egreso'}</h3>
-                <p className="text-xs text-gray-400">Introduce los campos correspondientes del registro contable</p>
+                <h3 className="font-bold text-white text-sm sm:text-base">Registrar {activeTab === 'Ingresos' ? 'Ingreso' : 'Egreso'}</h3>
+                <p className="text-xs text-gray-400 hidden sm:block">Introduce los campos correspondientes del registro contable</p>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white p-1 rounded-lg">
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white p-2 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateTransaction} className="p-6 space-y-4 text-xs">
+            <form onSubmit={handleCreateTransaction} className="p-4 sm:p-6 space-y-3 sm:space-y-4 text-xs overflow-y-auto max-h-[75vh] sm:max-h-[80vh]">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
                 <div>

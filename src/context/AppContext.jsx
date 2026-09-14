@@ -13,6 +13,7 @@ import * as obrasApi from '../services/obrasService';
 import * as cobrosApi from '../services/cobrosService';
 import * as agendaApi from '../services/agendaService';
 import * as configApi from '../services/configService';
+import * as bitacoraApi from '../services/bitacoraService';
 import { ServiceError } from '../services/errors';
 
 const AppContext = createContext();
@@ -131,9 +132,36 @@ const initialProductos = [
 ];
 
 const initialServicios = [
-  { id: "srv1", nombre: "Instalación Boca de Luz", categoria: "electricidad", descripcion: "Instalación completa de boca de techo/pared con cableado", precioBase: 13300, unidad: "boca", duracionEstimada: "2 hs", costoManoObra: 8000, estado: "Activo" },
-  { id: "srv2", nombre: "Colocación Placas Yeso Antihumedad", categoria: "durlock", descripcion: "Instalación de placas con perfilería y masillado completo", precioBase: 15500, unidad: "mts2", duracionEstimada: "4 hs", costoManoObra: 9000, estado: "Activo" },
-  { id: "srv3", nombre: "Pintura Látex Satinado (Paredes)", categoria: "pintura", descripcion: "Preparación de superficie y 2 manos de pintura", precioBase: 13500, unidad: "mts2", duracionEstimada: "3 hs", costoManoObra: 7500, estado: "Activo" }
+  // Electricidad
+  { id: "srv-elec-1", nombre: "Bocas de electricidad", categoria: "Electricidad", descripcion: "Instalación completa de boca de luz/toma", precioBase: 13300, unidad: "unid", duracionEstimada: "2 hs", costoManoObra: 8000, estado: "Activo" },
+  { id: "srv-elec-2", nombre: "Tomas corrientes adicionales", categoria: "Electricidad", descripcion: "Colocación y cableado de tomacorriente", precioBase: 6500, unidad: "unid", duracionEstimada: "1 hs", costoManoObra: 4000, estado: "Activo" },
+  { id: "srv-elec-3", nombre: "Teclas / Interruptores de luz", categoria: "Electricidad", descripcion: "Cambio o colocación de módulo llave de luz", precioBase: 4500, unidad: "unid", duracionEstimada: "0.5 hs", costoManoObra: 2500, estado: "Activo" },
+  { id: "srv-elec-4", nombre: "Llaves térmicas", categoria: "Electricidad", descripcion: "Instalación de llave térmica monopolar/bipolar", precioBase: 15500, unidad: "unid", duracionEstimada: "1 hs", costoManoObra: 9000, estado: "Activo" },
+  { id: "srv-elec-5", nombre: "Disyuntores diferenciales", categoria: "Electricidad", descripcion: "Colocación de disyuntor diferencial de protección", precioBase: 38000, unidad: "unid", duracionEstimada: "1.5 hs", costoManoObra: 18000, estado: "Activo" },
+  { id: "srv-elec-6", nombre: "Metros de caño corrugado colocado", categoria: "Electricidad", descripcion: "Tendido de cañería corrugada en losa o pared", precioBase: 1200, unidad: "mts", duracionEstimada: "0.2 hs", costoManoObra: 700, estado: "Activo" },
+  { id: "srv-elec-7", nombre: "Metros de cable 2.5mm pasado", categoria: "Electricidad", descripcion: "Pasado de cable por cañería existente", precioBase: 650, unidad: "mts", duracionEstimada: "0.1 hs", costoManoObra: 400, estado: "Activo" },
+  { id: "srv-elec-8", nombre: "Instalación de Tablero nuevo completo", categoria: "Electricidad", descripcion: "Montaje de caja de tablero principal y emprolijado de líneas", precioBase: 40000, unidad: "unid", duracionEstimada: "4 hs", costoManoObra: 25000, estado: "Activo" },
+  { id: "srv-elec-9", nombre: "Colocación Luces LED", categoria: "Electricidad", descripcion: "Montaje e instalación de artefactos dicroicas o paneles LED", precioBase: 3000, unidad: "unid", duracionEstimada: "0.5 hs", costoManoObra: 1800, estado: "Activo" },
+
+  // Durlock
+  { id: "srv-dur-1", nombre: "Zócalo placas de yeso antihumedad, perfil de ajuste, 60 cm alto", categoria: "Durlock", descripcion: "Colocación de zócalos antihumedad con perfiles", precioBase: 15500, unidad: "mts", duracionEstimada: "2 hs", costoManoObra: 9000, estado: "Activo" },
+  { id: "srv-dur-2", nombre: "Colocación de tabique durlock placa std", categoria: "Durlock", descripcion: "Estructura omegas/soleras y emplacado 2 caras", precioBase: 18500, unidad: "mts2", duracionEstimada: "3 hs", costoManoObra: 11000, estado: "Activo" },
+  { id: "srv-dur-3", nombre: "Cielo raso suspendido durlock completo", categoria: "Durlock", descripcion: "Estructura suspendida y emplacado de techo", precioBase: 22000, unidad: "mts2", duracionEstimada: "4 hs", costoManoObra: 13000, estado: "Activo" },
+  { id: "srv-dur-4", nombre: "Masillado y emplacado por metro cuadrado", categoria: "Durlock", descripcion: "Tratamiento de juntas con cinta y masilla 3 manos", precioBase: 5500, unidad: "mts2", duracionEstimada: "1 hs", costoManoObra: 3500, estado: "Activo" },
+
+  // Pintura
+  { id: "srv-pin-1", nombre: "Reparación y masillado completo paredes, sellador fijador y 2 manos látex satinado", categoria: "Pintura", descripcion: "Acondicionamiento completo de muros e interior", precioBase: 13500, unidad: "mts2", duracionEstimada: "3 hs", costoManoObra: 7500, estado: "Activo" },
+  { id: "srv-pin-2", nombre: "Pintura aberturas sintético satinado", categoria: "Pintura", descripcion: "Lijado y esmaltado sintético en marcos o puertas", precioBase: 33500, unidad: "unid", duracionEstimada: "4 hs", costoManoObra: 20000, estado: "Activo" },
+  { id: "srv-pin-3", nombre: "Pintura látex exterior impermeabilizante", categoria: "Pintura", descripcion: "Lavado e impermeabilización de fachadas", precioBase: 16000, unidad: "mts2", duracionEstimada: "3 hs", costoManoObra: 9500, estado: "Activo" },
+
+  // Remodelación
+  { id: "srv-rem-1", nombre: "Colocación zócalo mdf pre pintado", categoria: "Remodelación", descripcion: "Corte e instalación de zócalo MDF pegado/clavado", precioBase: 5700, unidad: "mts", duracionEstimada: "1 hs", costoManoObra: 3500, estado: "Activo" },
+  { id: "srv-rem-2", nombre: "Revestimiento cerámico completo", categoria: "Remodelación", descripcion: "Colocación de cerámicos/porcellanato y empastinado", precioBase: 28000, unidad: "mts2", duracionEstimada: "5 hs", costoManoObra: 16000, estado: "Activo" },
+
+  // Gas
+  { id: "srv-gas-1", nombre: "Instalación artefacto a gas", categoria: "Gas", descripcion: "Conexión de cocina, calefactor o termotanque a red de gas", precioBase: 18000, unidad: "unid", duracionEstimada: "2 hs", costoManoObra: 11000, estado: "Activo" },
+  { id: "srv-gas-2", nombre: "Cañería de gas nueva", categoria: "Gas", descripcion: "Tendido de tubería epoxi o thermofusión para gas", precioBase: 3500, unidad: "mts", duracionEstimada: "1 hs", costoManoObra: 2000, estado: "Activo" },
+  { id: "srv-gas-3", nombre: "Certificación instalación gas", categoria: "Gas", descripcion: "Prueba de hermeticidad y firma de matriculado", precioBase: 12000, unidad: "global", duracionEstimada: "2 hs", costoManoObra: 12000, estado: "Activo" }
 ];
 
 const initialPresupuestos = [
@@ -202,6 +230,14 @@ const initialAgenda = [
 
 // ─── Provider ───────────────────────────────────────────────────────────────
 
+function getInitialMergedServicios() {
+  const stored = safeGetItem('aj_servicios', []);
+  if (!stored || stored.length === 0) return initialServicios;
+  const existingNames = new Set(stored.map(s => (s.nombre || '').toLowerCase().trim()));
+  const missingDefaults = initialServicios.filter(s => !existingNames.has(s.nombre.toLowerCase().trim()));
+  return [...stored, ...missingDefaults];
+}
+
 export const AppProvider = ({ children }) => {
   const { user } = useAuth();
   const remote = shouldUseRemoteData();
@@ -211,7 +247,7 @@ export const AppProvider = ({ children }) => {
   const [proveedores, setProveedores] = useState(() => (remote ? [] : safeGetItem('aj_proveedores', initialProveedores)));
   const [tecnicos, setTecnicos] = useState(() => (remote ? [] : safeGetItem('aj_tecnicos', initialTecnicos)));
   const [productos, setProductos] = useState(() => (remote ? [] : safeGetItem('aj_productos', initialProductos)));
-  const [servicios, setServicios] = useState(() => (remote ? [] : safeGetItem('aj_servicios', initialServicios)));
+  const [servicios, setServicios] = useState(() => (remote ? [] : getInitialMergedServicios()));
   const [presupuestos, setPresupuestos] = useState(() => (remote ? [] : safeGetItem('aj_presupuestos', initialPresupuestos)));
   const [obras, setObras] = useState(() => (remote ? [] : safeGetItem('aj_obras', initialObras)));
   const [cobros, setCobros] = useState(() => (remote ? [] : safeGetItem('aj_cobros', initialCobros)));
@@ -230,6 +266,19 @@ export const AppProvider = ({ children }) => {
   useEffect(() => { if (persistLocal) localStorage.setItem('aj_obras', JSON.stringify(obras)); }, [obras, persistLocal]);
   useEffect(() => { if (persistLocal) localStorage.setItem('aj_cobros', JSON.stringify(cobros)); }, [cobros, persistLocal]);
   useEffect(() => { if (persistLocal) localStorage.setItem('aj_agenda', JSON.stringify(agenda)); }, [agenda, persistLocal]);
+
+  useEffect(() => {
+    if (!remote) {
+      setServicios(prev => {
+        const existingNames = new Set((prev || []).map(s => (s.nombre || '').toLowerCase().trim()));
+        const missing = initialServicios.filter(s => !existingNames.has(s.nombre.toLowerCase().trim()));
+        if (missing.length > 0) {
+          return [...prev, ...missing];
+        }
+        return prev;
+      });
+    }
+  }, [remote]);
 
   const loadRemote = useCallback(async () => {
     if (!remote || !user) return;
@@ -259,12 +308,34 @@ export const AppProvider = ({ children }) => {
         safe(() => cobrosApi.fetchCobros(), []),
         safe(() => agendaApi.fetchAgenda(), []),
       ]);
+
+      let finalServ = serv || [];
+      // One-time catalog seed (runs once per browser)
+      const SEED_KEY = 'aj_catalog_seeded_v1';
+      if (!localStorage.getItem(SEED_KEY)) {
+        try {
+          const existingNames = new Set(finalServ.map(s => (s.nombre || '').toLowerCase().trim()));
+          const missingDefaults = initialServicios.filter(s => !existingNames.has(s.nombre.toLowerCase().trim()));
+          if (missingDefaults.length > 0) {
+            for (const s of missingDefaults) {
+              const sToCreate = { ...s };
+              delete sToCreate.id;
+              const created = await safe(() => serviciosApi.createServicio(sToCreate), null);
+              if (created) finalServ.push(created);
+            }
+          }
+          localStorage.setItem(SEED_KEY, Date.now().toString());
+        } catch (e) {
+          console.warn('Error en seed inicial del catálogo:', e);
+        }
+      }
+
       if (cfg) setConfigState(cfg);
       setClientes(cli);
       setProveedores(prov);
       setTecnicos(tec);
       setProductos(prod);
-      setServicios(serv);
+      setServicios(finalServ);
       setPresupuestos(pres);
       setObras(obr);
       setCobros(cob);
@@ -308,6 +379,7 @@ export const AppProvider = ({ children }) => {
             {
               id: generateId(),
               fecha: new Date().toISOString(),
+              createdAt: new Date().toISOString(),
               usuario: config.titular,
               ...entry
             },
@@ -385,6 +457,10 @@ export const AppProvider = ({ children }) => {
     return merged;
   };
 
+  const removeProveedor = async (id) => {
+    setProveedores(prev => prev.filter(p => p.id !== id));
+  };
+
   const createTecnico = async (payload) => {
     if (remote) {
       const created = await tecnicosApi.createTecnico(payload);
@@ -394,6 +470,30 @@ export const AppProvider = ({ children }) => {
     const created = { id: generateId(), ...payload };
     setTecnicos(prev => [...prev, created]);
     return created;
+  };
+
+  const saveTecnico = async (id, payload) => {
+    const current = tecnicos.find(t => t.id === id) || {};
+    const merged = { ...current, ...payload, id };
+    if (remote) {
+      await tecnicosApi.updateTecnico(id, merged);
+      await loadRemote();
+      return merged;
+    }
+    setTecnicos(prev => prev.map(t => t.id === id ? merged : t));
+    return merged;
+  };
+
+  const removeTecnico = async (id) => {
+    const current = tecnicos.find(t => t.id === id);
+    if (!current) return;
+    if (remote) {
+      await tecnicosApi.updateTecnico(id, { ...current, estado: 'Inactivo' });
+      await loadRemote();
+      return;
+    }
+    // Eliminación lógica: se conserva el historial (obras, agenda) intacto.
+    setTecnicos(prev => prev.map(t => t.id === id ? { ...t, estado: 'Inactivo' } : t));
   };
 
   const saveProducto = async (payload, editingId) => {
@@ -457,7 +557,7 @@ export const AppProvider = ({ children }) => {
     }
     const created = {
       id: generateId(),
-      numero: payload.numero || (presupuestos.length + 17).toString().padStart(5, '0'),
+      numero: payload.numero || (Math.max(0, ...presupuestos.map(p => parseInt(p.numero, 10) || 0)) + 1).toString().padStart(5, '0'),
       ...payload,
     };
     setPresupuestos(prev => [created, ...prev]);
@@ -485,7 +585,8 @@ export const AppProvider = ({ children }) => {
     if (!pres) return null;
 
     const cliente = clientes.find(c => c.id === pres.clienteId);
-    const newObraNum = (obras.length + 1).toString().padStart(4, '0');
+    const maxNum = obras.reduce((max, o) => Math.max(max, parseInt(o.numero, 10) || 0), 0);
+    const newObraNum = (maxNum + 1).toString().padStart(4, '0');
 
     const newObra = {
       id: generateId(),
@@ -578,7 +679,8 @@ export const AppProvider = ({ children }) => {
         bitacora: [
           {
             id: generateId(),
-            fecha: new Date().toISOString(),
+            fecha: (entry && entry.fecha) || new Date().toISOString(),
+            createdAt: new Date().toISOString(),
             usuario: config.titular,
             ...entry,
           },
@@ -586,6 +688,61 @@ export const AppProvider = ({ children }) => {
         ],
       };
     }));
+  };
+
+  /** Eliminación lógica de obra: oculta la obra de la gestión activa conservando cobros, materiales y bitácora. */
+  const removeObra = async (id) => {
+    if (remote) {
+      await obrasApi.softDeleteObra(id);
+      await loadRemote();
+      return;
+    }
+    setObras(prev => prev.map(o => o.id === id ? { ...o, eliminada: true } : o));
+  };
+
+  /** Corrige fecha/hora (o descripción) de una entrada de bitácora sin tocar created_at. */
+  const updateBitacoraEntrada = async (scope, entityId, entryId, cambios) => {
+    if (remote) {
+      await bitacoraApi.updateBitacoraEntrada(entryId, cambios);
+      await loadRemote();
+      return;
+    }
+    if (scope === 'cliente') {
+      setClientes(prev => prev.map(c => {
+        if (c.id !== entityId) return c;
+        return { ...c, bitacora: (c.bitacora || []).map(b => b.id === entryId ? { ...b, ...cambios } : b) };
+      }));
+      return;
+    }
+    if (scope === 'obra') {
+      setObras(prev => prev.map(o => {
+        if (o.id !== entityId) return o;
+        return { ...o, bitacora: (o.bitacora || []).map(b => b.id === entryId ? { ...b, ...cambios } : b) };
+      }));
+    }
+  };
+
+  const removeCobro = async (id) => {
+    const target = cobros.find(c => c.id === id);
+
+    if (target && target.tipo === "Ingreso" && target.obraId) {
+      setObras(prev => prev.map(o => {
+        if (o.id === target.obraId) {
+          const importe = Number(target.importe || 0);
+          const totalPagado = Math.max(0, Number(o.importePagado || 0) - importe);
+          const totalPendiente = Math.max(0, Number(o.importeTotal || 0) - totalPagado);
+          return {
+            ...o,
+            importePagado: totalPagado,
+            importePendiente: totalPendiente,
+            pagosRegistrados: (o.pagosRegistrados || []).filter(p => p.id !== target.id),
+          };
+        }
+        return o;
+      }));
+    }
+
+    setCobros(prev => prev.filter(c => c.id !== id));
   };
 
   /** Registra un cobro (ingreso o egreso) */
@@ -718,6 +875,15 @@ export const AppProvider = ({ children }) => {
     return created;
   };
 
+  const saveAgendaEvent = async (id, payload) => {
+    if (remote) {
+      await agendaApi.updateAgendaEvent(id, payload);
+      await loadRemote();
+      return;
+    }
+    setAgenda(prev => prev.map(ev => ev.id === id ? { ...ev, ...payload } : ev));
+  };
+
   const removeAgendaEvent = async (id) => {
     if (remote) {
       await agendaApi.deleteAgendaEvent(id);
@@ -740,6 +906,11 @@ export const AppProvider = ({ children }) => {
     aj_agenda: agenda,
   });
 
+  // Vista activa: las obras eliminadas (lógica) no aparecen en la gestión normal,
+  // y los técnicos inactivos no se ofrecen para asignaciones nuevas.
+  const activeObras = obras.filter(o => !o.eliminada);
+  const tecnicosActivos = tecnicos.filter(t => t.estado !== 'Inactivo');
+
   // ─── Context Value ────────────────────────────────────────────────────────
 
   return (
@@ -754,10 +925,11 @@ export const AppProvider = ({ children }) => {
       clientes,
       proveedores,
       tecnicos,
+      tecnicosActivos,
       productos,
       servicios,
       presupuestos,
-      obras,
+      obras: activeObras,
       cobros,
       agenda,
       createCliente,
@@ -767,6 +939,11 @@ export const AppProvider = ({ children }) => {
       createProveedor,
       saveProveedor,
       createTecnico,
+      saveTecnico,
+      removeTecnico,
+      removeProveedor,
+      removeCobro,
+      saveAgendaEvent,
       saveProducto,
       removeProducto,
       saveServicio,
@@ -776,7 +953,9 @@ export const AppProvider = ({ children }) => {
       convertPresupuestoToObra,
       createObra,
       saveObra,
+      removeObra,
       addObraBitacora,
+      updateBitacoraEntrada,
       addCobro,
       addMaterialToObra,
       createAgendaEvent,

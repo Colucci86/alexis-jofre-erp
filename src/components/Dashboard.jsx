@@ -22,6 +22,44 @@ import {
   Percent
 } from 'lucide-react';
 
+/** Parsea una fecha 'YYYY-MM-DD...' como fecha local (evita desfase UTC) */
+function parseLocalDate(dateStr) {
+  if (!dateStr) return null;
+  const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** Devuelve true si la fecha cae dentro del periodo seleccionado */
+function inPeriod(dateStr, periodo) {
+  if (!dateStr) return false;
+  const d = parseLocalDate(dateStr);
+  if (!d) return false;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  if (periodo === 'Hoy') {
+    return d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
+  }
+  if (periodo === 'Esta semana') {
+    const day = today.getDay(); // 0 = domingo
+    const offset = day === 0 ? 6 : day - 1;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - offset);
+    const nextMonday = new Date(monday);
+    nextMonday.setDate(monday.getDate() + 7);
+    return d.getTime() >= monday.getTime() && d.getTime() < nextMonday.getTime();
+  }
+  if (periodo === 'Este mes') {
+    return d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth();
+  }
+  if (periodo === 'Este año') {
+    return d.getFullYear() === today.getFullYear();
+  }
+  return true;
+}
+
 export default function Dashboard({ setCurrentPage, setSelectedItem }) {
   const { 
     clientes, 
@@ -44,124 +82,143 @@ export default function Dashboard({ setCurrentPage, setSelectedItem }) {
     }).format(val);
   };
 
-  // Calculations for dashboard
-  const activeObras = obras.filter(o => o.estado === 'En curso' || o.estado === 'En proceso');
-  const finishedObras = obras.filter(o => o.estado === 'Finalizado');
-  
-  // Pending collections
-  const pendingCobrosTotal = obras.reduce((acc, curr) => acc + Number(curr.importePendiente), 0);
+  // Calculations for dashboard (filtered by selected period)
+  const presupuestosPeriodo = presupuestos.filter(p => inPeriod(p.fecha, periodo));
+  const activeObras = obras.filter(o => (o.estado === 'En curso' || o.estado === 'En proceso') && inPeriod(o.fechaInicio, periodo));
+  const finishedObras = obras.filter(o => o.estado === 'Finalizado' && inPeriod(o.fechaFin || o.fechaInicio, periodo));
 
-  // Income vs Expenses
-  const totalIngresos = cobros
+  // Pending collections (obras que arrancaron en el periodo)
+  const pendingCobrosTotal = obras
+    .filter(o => Number(o.importePendiente || 0) > 0 && inPeriod(o.fechaInicio, periodo))
+    .reduce((acc, curr) => acc + Number(curr.importePendiente || 0), 0);
+
+  // Income vs Expenses (movimientos del periodo)
+  const cobrosPeriodo = cobros.filter(c => inPeriod(c.fecha, periodo));
+  const totalIngresos = cobrosPeriodo
     .filter(c => c.tipo === 'Ingreso')
-    .reduce((acc, curr) => acc + Number(curr.importe), 0);
+    .reduce((acc, curr) => acc + Number(curr.importe || 0), 0);
 
-  const totalEgresos = cobros
+  const totalEgresos = cobrosPeriodo
     .filter(c => c.tipo === 'Egreso')
-    .reduce((acc, curr) => acc + Number(curr.importe), 0);
+    .reduce((acc, curr) => acc + Number(curr.importe || 0), 0);
 
   const netGain = totalIngresos - totalEgresos;
 
   // Alerts
   const lowStockProducts = productos.filter(p => Number(p.stockActual) <= Number(p.stockMinimo));
-  const pendingPresupuestos = presupuestos.filter(p => p.estado === 'Pendiente' || p.estado === 'Enviado');
+  const pendingPresupuestos = presupuestosPeriodo.filter(p => p.estado === 'Pendiente' || p.estado === 'Enviado');
+
+  // Próximos eventos de la agenda (hoy en adelante), ordenados por fecha
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const upcomingEvents = agenda
+    .filter(ev => ev.start && new Date(ev.start).getTime() >= todayStart.getTime())
+    .sort((a, b) => new Date(a.start) - new Date(b.start))
+    .slice(0, 6);
 
   // Chart Data preparation (Last 6 months)
-  const chartData = [
-    { name: 'Ene', Facturacion: 450000, Cobrado: 320000 },
-    { name: 'Feb', Facturacion: 580000, Cobrado: 450000 },
-    { name: 'Mar', Facturacion: 720000, Cobrado: 680000 },
-    { name: 'Abr', Facturacion: 900000, Cobrado: 730000 },
-    { name: 'May', Facturacion: 850000, Cobrado: 800000 },
-    { name: 'Jun', Facturacion: 980000, Cobrado: 850000 }
-  ];
-
-  // Modify April using real budget from Martín Colucci
-  chartData[3].Facturacion = 730000;
-  chartData[3].Cobrado = 150000; // Martín paid 150.000 so far
+  const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const now = new Date();
+  const chartData = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+    const month = d.getMonth();
+    const year = d.getFullYear();
+    const monthCobros = cobros.filter(c => {
+      if (!c.fecha) return false;
+      const [y, m] = c.fecha.split('-').map(Number);
+      return y === year && m === month + 1;
+    });
+    return {
+      name: monthNames[month],
+      Facturacion: monthCobros.filter(c => c.tipo === 'Ingreso').reduce((acc, c) => acc + Number(c.importe || 0), 0),
+      Cobrado: monthCobros.filter(c => c.tipo === 'Ingreso').reduce((acc, c) => acc + Number(c.importe || 0), 0),
+    };
+  });
 
   return (
     <div className="space-y-6">
       {/* Header and selector */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-white">Hola, Alexis 👋</h2>
-          <p className="text-gray-400 text-sm">Aquí tienes un resumen de la actividad de tu negocio.</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-white">Hola, Alexis 👋</h2>
+          <p className="text-gray-400 text-xs sm:text-sm">Aquí tienes un resumen de la actividad de tu negocio.</p>
         </div>
 
-        {/* Period selection */}
-        <div className="flex bg-[#1E293B] p-1 rounded-lg border border-[#334155] self-start">
-          {['Hoy', 'Esta semana', 'Este mes', 'Este año'].map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriodo(p)}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
-                periodo === p 
-                  ? 'bg-blue-600 text-white shadow-sm' 
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              {p}
-            </button>
-          ))}
+        {/* Period selection - scrollable on mobile */}
+        <div className="overflow-x-auto scrollbar-hide -mx-1 px-1">
+          <div className="flex bg-[#1E293B] p-1 rounded-lg border border-[#334155] self-start w-max">
+            {['Hoy', 'Esta semana', 'Este mes', 'Este año'].map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriodo(p)}
+                className={`px-2.5 sm:px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap ${
+                  periodo === p 
+                    ? 'bg-blue-600 text-white shadow-sm' 
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Top 4 Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Presupuestos del mes */}
-        <div className="bg-[#1E293B] p-6 rounded-xl border border-[#334155] flex items-center justify-between shadow-lg">
+        <div className="bg-[#1E293B] p-4 sm:p-6 rounded-xl border border-[#334155] flex items-center justify-between shadow-lg">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Presupuestos del mes</p>
-            <h3 className="text-2xl font-bold text-white mt-1">{presupuestos.length}</h3>
-            <p className="text-xs text-gray-500 mt-2">
-              <span className="text-yellow-500 font-semibold">{pendingPresupuestos.length}</span> pendientes de firma
+            <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-400">Presupuestos</p>
+            <h3 className="text-xl sm:text-2xl font-bold text-white mt-1">{presupuestosPeriodo.length}</h3>
+            <p className="text-[10px] sm:text-xs text-gray-500 mt-1 sm:mt-2">
+              <span className="text-yellow-500 font-semibold">{pendingPresupuestos.length}</span> pendientes en el periodo
             </p>
           </div>
-          <div className="w-12 h-12 bg-blue-500/10 text-blue-400 rounded-xl flex items-center justify-center">
-            <FileText className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-500/10 text-blue-400 rounded-xl flex items-center justify-center shrink-0">
+            <FileText className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* Obras en curso */}
-        <div className="bg-[#1E293B] p-6 rounded-xl border border-[#334155] flex items-center justify-between shadow-lg">
+        <div className="bg-[#1E293B] p-4 sm:p-6 rounded-xl border border-[#334155] flex items-center justify-between shadow-lg">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Obras en curso</p>
-            <h3 className="text-2xl font-bold text-white mt-1">{activeObras.length}</h3>
-            <p className="text-xs text-gray-500 mt-2">
-              Asignadas a técnicos especializados
+            <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-400">Obras activas</p>
+            <h3 className="text-xl sm:text-2xl font-bold text-white mt-1">{activeObras.length}</h3>
+            <p className="text-[10px] sm:text-xs text-gray-500 mt-1 sm:mt-2 hidden sm:block">
+              Asignadas a técnicos
             </p>
           </div>
-          <div className="w-12 h-12 bg-yellow-500/10 text-yellow-400 rounded-xl flex items-center justify-center">
-            <Briefcase className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-yellow-500/10 text-yellow-400 rounded-xl flex items-center justify-center shrink-0">
+            <Briefcase className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* Cobros pendientes */}
-        <div className="bg-[#1E293B] p-6 rounded-xl border border-[#334155] flex items-center justify-between shadow-lg">
+        <div className="bg-[#1E293B] p-4 sm:p-6 rounded-xl border border-[#334155] flex items-center justify-between shadow-lg">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Cobros pendientes</p>
-            <h3 className="text-2xl font-bold text-white mt-1">{formatCurrency(pendingCobrosTotal)}</h3>
-            <p className="text-xs text-gray-500 mt-2">
-              Saldos activos de clientes
+            <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-400">Cobros pend.</p>
+            <h3 className="text-base sm:text-2xl font-bold text-white mt-1">{formatCurrency(pendingCobrosTotal)}</h3>
+            <p className="text-[10px] sm:text-xs text-gray-500 mt-1 sm:mt-2 hidden sm:block">
+              Saldos activos
             </p>
           </div>
-          <div className="w-12 h-12 bg-red-500/10 text-red-400 rounded-xl flex items-center justify-center">
-            <DollarSign className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-500/10 text-red-400 rounded-xl flex items-center justify-center shrink-0">
+            <DollarSign className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* Obras finalizadas */}
-        <div className="bg-[#1E293B] p-6 rounded-xl border border-[#334155] flex items-center justify-between shadow-lg">
+        <div className="bg-[#1E293B] p-4 sm:p-6 rounded-xl border border-[#334155] flex items-center justify-between shadow-lg">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Obras finalizadas</p>
-            <h3 className="text-2xl font-bold text-white mt-1">{finishedObras.length}</h3>
-            <p className="text-xs text-gray-500 mt-2">
-              Completadas satisfactoriamente
+            <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-400">Finalizadas</p>
+            <h3 className="text-xl sm:text-2xl font-bold text-white mt-1">{finishedObras.length}</h3>
+            <p className="text-[10px] sm:text-xs text-gray-500 mt-1 sm:mt-2 hidden sm:block">
+              Completadas
             </p>
           </div>
-          <div className="w-12 h-12 bg-green-500/10 text-green-400 rounded-xl flex items-center justify-center">
-            <CheckCircle className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-500/10 text-green-400 rounded-xl flex items-center justify-center shrink-0">
+            <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
       </div>
@@ -209,7 +266,7 @@ export default function Dashboard({ setCurrentPage, setSelectedItem }) {
             <h3 className="font-semibold text-white text-base">Evolución Facturación vs Cobrado</h3>
             <p className="text-xs text-gray-400">Últimos 6 meses</p>
           </div>
-          <div className="h-72 w-full">
+          <div className="h-48 sm:h-64 lg:h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={chartData}
@@ -244,12 +301,12 @@ export default function Dashboard({ setCurrentPage, setSelectedItem }) {
             </div>
             
             <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-              {agenda.length === 0 ? (
+              {upcomingEvents.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 text-sm">
-                  No hay visitas programadas hoy.
+                  No hay visitas agendadas para hoy o próximos días.
                 </div>
               ) : (
-                agenda.map((ev) => {
+                upcomingEvents.map((ev) => {
                   const evDate = new Date(ev.start);
                   return (
                     <div 
@@ -297,7 +354,7 @@ export default function Dashboard({ setCurrentPage, setSelectedItem }) {
                   onClick={() => { setCurrentPage('stock'); }}
                   className="text-[11px] bg-yellow-950/80 border border-yellow-800 text-yellow-400 px-2.5 py-0.5 rounded-md cursor-pointer hover:bg-yellow-900/60"
                 >
-                  {p.nombre} ({p.stockActual} {p.unidadMedida} left)
+                  {p.nombre} ({p.stockActual} {p.unidadMedida} disponibles)
                 </span>
               ))}
             </div>

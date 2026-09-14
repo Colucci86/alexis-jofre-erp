@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { TIPOS_TRABAJO } from '../utils/categorias';
+import { generateId } from '../utils/id';
 import { 
   Plus, 
   Search, 
@@ -15,19 +17,32 @@ import {
   Camera,
   BookOpen,
   X,
-  AlertCircle
+  AlertCircle,
+  Trash2,
+  Pencil
 } from 'lucide-react';
+
+/** Devuelve la cadena YYYY-MM-DD de una fecha local (sin conversión UTC) */
+function toLocalDateString(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 export default function Obras() {
   const { 
     obras, 
     clientes, 
     tecnicos, 
+    tecnicosActivos, 
     productos, 
     addMaterialToObra, 
     createObra,
     saveObra,
+    removeObra,
     addObraBitacora,
+    updateBitacoraEntrada,
     config 
   } = useApp();
 
@@ -45,7 +60,7 @@ export default function Obras() {
     direccion: '',
     telefono: '',
     tecnicoAsignadoId: '',
-    fechaInicio: new Date().toISOString().split('T')[0],
+    fechaInicio: toLocalDateString(),
     hora: '08:30',
     importeTotal: 0,
     formaPago: 'Efectivo',
@@ -59,6 +74,15 @@ export default function Obras() {
 
   // Manual bitacora state
   const [manualNote, setManualNote] = useState('');
+  const [manualFecha, setManualFecha] = useState(toLocalDateString());
+  const [manualHora, setManualHora] = useState(
+    () => new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  );
+  const [manualFoto, setManualFoto] = useState('');
+
+  // Edit existing bitacora entry state
+  const [editingEntryId, setEditingEntryId] = useState(null);
+  const [editEntryData, setEditEntryData] = useState({ fecha: '', hora: '' });
 
   // Keep selectedObra synced with obras state
   useEffect(() => {
@@ -77,7 +101,8 @@ export default function Obras() {
     const client = clientes.find(c => c.id === newObra.clienteId);
     const tech = tecnicos.find(t => t.id === newObra.tecnicoAsignadoId);
     
-    const newObraNum = (obras.length + 9).toString().padStart(4, '0');
+    const maxNum = obras.reduce((max, o) => Math.max(max, parseInt(o.numero, 10) || 0), 0);
+    const newObraNum = (maxNum + 1).toString().padStart(4, '0');
     const payload = {
       numero: newObraNum,
       clienteId: newObra.clienteId,
@@ -102,6 +127,7 @@ export default function Obras() {
       pagosRegistrados: [],
       bitacora: [
         {
+          id: generateId(),
           fecha: new Date().toISOString(),
           tipo: 'Creación',
           descripcion: 'Registro inicial de la obra.',
@@ -170,18 +196,61 @@ export default function Obras() {
     e.preventDefault();
     if (!manualNote) return;
 
+    const fechaISO = new Date(`${manualFecha}T${manualHora || '00:00'}:00`).toISOString();
+
     try {
       await addObraBitacora(selectedObra.id, {
         tipo: 'Nota Manual',
         descripcion: manualNote,
+        fecha: fechaISO,
+        fotoUrl: manualFoto,
       });
       setManualNote('');
+      setManualFoto('');
+      setManualFecha(toLocalDateString());
+      setManualHora(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
     } catch (err) {
       alert(err.message || 'No se pudo guardar la nota.');
     }
   };
 
+  const handleDeleteObra = async (obra) => {
+    if (!window.confirm(`¿Eliminar la obra #${obra.numero} de ${obra.clienteNombre}? Quedará oculta de la gestión activa conservando cobros, materiales y bitácora.`)) return;
+    try {
+      await removeObra(obra.id);
+      setSelectedObra(null);
+      setMobileView('list');
+    } catch (err) {
+      alert(err.message || 'No se pudo eliminar la obra.');
+    }
+  };
+
+  const startEditEntry = (b) => {
+    setEditingEntryId(b.id);
+    const d = new Date(b.fecha);
+    if (Number.isNaN(d.getTime())) {
+      setEditEntryData({ fecha: toLocalDateString(), hora: '00:00' });
+      return;
+    }
+    setEditEntryData({
+      fecha: toLocalDateString(d),
+      hora: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
+    });
+  };
+
+  const handleSaveEntryEdit = async (b) => {
+    const fechaISO = new Date(`${editEntryData.fecha}T${editEntryData.hora || '00:00'}:00`).toISOString();
+    try {
+      await updateBitacoraEntrada('obra', selectedObra.id, b.id, { fecha: fechaISO });
+      setEditingEntryId(null);
+    } catch (err) {
+      alert(err.message || 'No se pudo actualizar la entrada.');
+    }
+  };
+
   // Filter list
+  const [mobileView, setMobileView] = useState('list'); // 'list' | 'detail'
+
   const filteredObras = obras.filter(o => {
     const matchesSearch = o.clienteNombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           o.numero.includes(searchTerm) || 
@@ -191,16 +260,18 @@ export default function Obras() {
   });
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[calc(100vh-10rem)]">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 min-h-[calc(100vh-10rem)]">
       
       {/* LEFT COLUMN: LIST */}
-      <div className="lg:col-span-5 bg-[#1E293B] rounded-xl border border-[#334155] p-6 flex flex-col justify-between shadow-lg">
+      <div className={`lg:col-span-5 bg-[#1E293B] rounded-xl border border-[#334155] p-4 sm:p-6 flex flex-col justify-between shadow-lg ${
+        mobileView === 'detail' ? 'hidden lg:flex' : 'flex'
+      }`}>
         <div>
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-white">Obras</h3>
+          <div className="flex justify-between items-center mb-4 sm:mb-6">
+            <h3 className="text-base sm:text-lg font-bold text-white">Obras</h3>
             <button
               onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-colors"
             >
               <Plus className="w-4 h-4" />
               Nueva Obra
@@ -234,12 +305,12 @@ export default function Obras() {
             </select>
           </div>
 
-          {/* List scroll container */}
+            {/* List scroll container */}
           <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
             {filteredObras.map(o => (
               <div
                 key={o.id}
-                onClick={() => { setSelectedObra(o); setActiveSubTab('Resumen'); }}
+                onClick={() => { setSelectedObra(o); setActiveSubTab('Resumen'); setMobileView('detail'); }}
                 className={`p-3.5 rounded-lg border transition-all cursor-pointer flex items-center justify-between ${
                   selectedObra?.id === o.id 
                     ? 'bg-[#16223F] border-blue-500 shadow-md' 
@@ -279,7 +350,10 @@ export default function Obras() {
       </div>
 
       {/* RIGHT COLUMN: WORK DETAILS & PROGRESS */}
-      <div className="lg:col-span-7">
+      <div className={`lg:col-span-7 ${
+        mobileView === 'list' && !selectedObra ? 'hidden lg:block' : 
+        mobileView === 'list' ? 'hidden lg:block' : 'block'
+      }`}>
         {!selectedObra ? (
           <div className="bg-[#1E293B] rounded-xl border border-[#334155] p-6 h-full flex flex-col items-center justify-center text-center shadow-lg text-gray-500">
             <Briefcase className="w-12 h-12 mb-3 text-gray-600" />
@@ -287,6 +361,15 @@ export default function Obras() {
           </div>
         ) : (
           <div className="bg-[#1E293B] rounded-xl border border-[#334155] flex flex-col justify-between overflow-hidden shadow-lg h-full">
+            {/* Back button on mobile */}
+            <div className="lg:hidden p-3 border-b border-[#334155] bg-[#111827]/40">
+              <button
+                onClick={() => setMobileView('list')}
+                className="flex items-center gap-2 text-blue-400 text-xs font-semibold"
+              >
+                ← Volver a la lista de obras
+              </button>
+            </div>
             
             {/* Header / Title bar */}
             <div className="p-6 border-b border-[#334155] bg-[#111827]/40 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -331,16 +414,23 @@ export default function Obras() {
                   <option value="Finalizado">Finalizado</option>
                   <option value="Cancelado">Cancelado</option>
                 </select>
+                <button
+                  onClick={() => handleDeleteObra(selectedObra)}
+                  className="flex items-center justify-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold py-2 rounded-lg text-[10px] transition-colors border border-red-500/20"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Eliminar Obra
+                </button>
               </div>
             </div>
 
             {/* Inner Subtabs */}
-            <div className="flex border-b border-[#334155] bg-[#111827]/20">
+            <div className="flex border-b border-[#334155] bg-[#111827]/20 overflow-x-auto">
               {['Resumen', 'Materiales', 'Pagos', 'Bitácora de Progreso'].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveSubTab(tab)}
-                  className={`px-5 py-3.5 text-xs font-semibold border-b-2 transition-all ${
+                  className={`px-4 sm:px-5 py-3 sm:py-3.5 text-xs font-semibold border-b-2 transition-all whitespace-nowrap ${
                     activeSubTab === tab 
                       ? 'border-blue-500 text-white bg-[#1E293B]' 
                       : 'border-transparent text-gray-400 hover:text-white hover:bg-[#16223F]/30'
@@ -493,20 +583,53 @@ export default function Obras() {
               {activeSubTab === 'Bitácora de Progreso' && (
                 <div className="space-y-6">
                   {/* Manual entry note */}
-                  <form onSubmit={handleAddManualNote} className="flex gap-2">
+                  <form onSubmit={handleAddManualNote} className="bg-[#111827]/40 rounded-xl border border-[#334155] p-3 space-y-3">
                     <input
                       type="text"
                       placeholder="Registra una nueva actualización de la visita..."
                       value={manualNote}
                       onChange={(e) => setManualNote(e.target.value)}
-                      className="flex-1 bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-xs text-white focus:outline-none"
+                      className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-xs text-white focus:outline-none"
                     />
-                    <button
-                      type="submit"
-                      className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-lg text-xs"
-                    >
-                      Registrar
-                    </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-semibold text-gray-400 mb-1">Fecha del evento</label>
+                        <input
+                          type="date"
+                          value={manualFecha}
+                          onChange={(e) => setManualFecha(e.target.value)}
+                          className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-gray-400 mb-1">Hora</label>
+                        <input
+                          type="time"
+                          value={manualHora}
+                          onChange={(e) => setManualHora(e.target.value)}
+                          className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none"
+                        />
+                      </div>
+                      <div className="sm:flex sm:items-end">
+                        <button
+                          type="submit"
+                          className="w-full flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-lg text-xs"
+                        >
+                          <Camera className="w-3.5 h-3.5" />
+                          Registrar nota
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-gray-400 mb-1">Foto / Adjunto (URL)</label>
+                      <input
+                        type="url"
+                        placeholder="https://... (opcional)"
+                        value={manualFoto}
+                        onChange={(e) => setManualFoto(e.target.value)}
+                        className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-xs text-white focus:outline-none"
+                      />
+                    </div>
                   </form>
 
                   {/* Timeline */}
@@ -516,10 +639,62 @@ export default function Obras() {
                         <span className="absolute -left-[21px] top-1 w-3 h-3 bg-blue-500 rounded-full border border-darkBg" />
                         <div className="bg-[#111827]/40 p-3 rounded-lg border border-[#334155] text-xs">
                           <div className="flex justify-between items-center text-[10px] text-gray-400 mb-1">
-                            <span className="font-bold uppercase tracking-wider text-blue-400">{b.tipo}</span>
-                            <span>{new Date(b.fecha).toLocaleString('es-AR')}</span>
+                            <span className="flex items-center gap-2">
+                              <span className="font-bold uppercase tracking-wider text-blue-400">{b.tipo}</span>
+                              <button
+                                onClick={() => startEditEntry(b)}
+                                title="Corregir fecha/hora"
+                                className="text-gray-500 hover:text-blue-400"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                            </span>
+                            {editingEntryId === b.id ? (
+                              <span className="flex items-center gap-2">
+                                <input
+                                  type="date"
+                                  value={editEntryData.fecha}
+                                  onChange={(e) => setEditEntryData(prev => ({ ...prev, fecha: e.target.value }))}
+                                  className="bg-[#0F1729] border border-[#334155] rounded px-2 py-1 text-[10px] text-white focus:outline-none"
+                                />
+                                <input
+                                  type="time"
+                                  value={editEntryData.hora}
+                                  onChange={(e) => setEditEntryData(prev => ({ ...prev, hora: e.target.value }))}
+                                  className="bg-[#0F1729] border border-[#334155] rounded px-2 py-1 text-[10px] text-white focus:outline-none"
+                                />
+                                <button
+                                  onClick={() => handleSaveEntryEdit(b)}
+                                  className="text-blue-400 hover:text-blue-300 font-bold"
+                                >
+                                  Guardar
+                                </button>
+                                <button
+                                  onClick={() => setEditingEntryId(null)}
+                                  className="text-gray-400 hover:text-red-400"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </span>
+                            ) : (
+                              <span>{new Date(b.fecha).toLocaleString('es-AR')}</span>
+                            )}
                           </div>
                           <p className="text-gray-300 leading-normal">{b.descripcion}</p>
+                          {b.fotoUrl && (
+                            <a
+                              href={b.fotoUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-2 block"
+                            >
+                              <img
+                                src={b.fotoUrl}
+                                alt="Adjunto de la visita"
+                                className="max-h-40 rounded-lg border border-[#334155] object-cover"
+                              />
+                            </a>
+                          )}
                           <p className="text-[9px] text-gray-500 text-right mt-1">Registró: {b.usuario}</p>
                         </div>
                       </div>
@@ -533,21 +708,21 @@ export default function Obras() {
         )}
       </div>
 
-      {/* NEW OBRA CREATION MODAL */}
+      {/* NUEVA OBRA MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-[#1E293B] border border-[#334155] rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-[#334155] flex justify-between items-center bg-[#111827]/40">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+          <div className="bg-[#1E293B] border border-[#334155] rounded-t-2xl sm:rounded-2xl w-full sm:max-w-xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:fade-in sm:zoom-in-95 duration-200">
+            <div className="p-4 sm:p-6 border-b border-[#334155] flex justify-between items-center bg-[#111827]/40">
               <div>
-                <h3 className="font-bold text-white text-base">Nueva Obra</h3>
-                <p className="text-xs text-gray-400">Registra una nueva obra de mantenimiento</p>
+                <h3 className="font-bold text-white text-sm sm:text-base">Crear Nueva Obra</h3>
+                <p className="text-xs text-gray-400 hidden sm:block">Registra una nueva obra a partir de un cliente activo</p>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white p-1 rounded-lg">
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white p-2 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateObra} className="p-6 space-y-4">
+            <form onSubmit={handleCreateObra} className="p-4 sm:p-6 space-y-3 sm:space-y-4 text-xs overflow-y-auto max-h-[75vh] sm:max-h-[80vh]">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
                 <div>
@@ -572,12 +747,7 @@ export default function Obras() {
                     onChange={(e) => setNewObra(prev => ({ ...prev, tipoTrabajo: e.target.value }))}
                     className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
                   >
-                    <option value="Electricidad">Electricidad</option>
-                    <option value="Durlock">Durlock</option>
-                    <option value="Gas">Gas</option>
-                    <option value="Pintura">Pintura</option>
-                    <option value="Remodelación">Remodelación</option>
-                    <option value="Otro">Otro</option>
+                    {TIPOS_TRABAJO.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
                 </div>
 
@@ -600,10 +770,32 @@ export default function Obras() {
                     className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
                   >
                     <option value="">Sin asignar</option>
-                    {tecnicos.map(t => (
+                    {tecnicosActivos.map(t => (
                       <option key={t.id} value={t.id}>{t.nombre} {t.apellido} ({t.especialidad})</option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1">Fecha de Inicio *</label>
+                  <input
+                    type="date"
+                    required
+                    value={newObra.fechaInicio}
+                    onChange={(e) => setNewObra(prev => ({ ...prev, fechaInicio: e.target.value }))}
+                    className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 mb-1">Hora Inicio *</label>
+                  <input
+                    type="time"
+                    required
+                    value={newObra.hora}
+                    onChange={(e) => setNewObra(prev => ({ ...prev, hora: e.target.value }))}
+                    className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-sm text-white focus:outline-none"
+                  />
                 </div>
 
                 <div>

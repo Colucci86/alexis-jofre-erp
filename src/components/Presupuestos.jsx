@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { generatePresupuestoPDF } from '../utils/pdfGenerator';
 import { generateId } from '../utils/id';
+import { TIPOS_TRABAJO } from '../utils/categorias';
 import { 
   Plus, 
   Search, 
@@ -24,56 +25,12 @@ import {
 } from 'lucide-react';
 
 const ESTADOS_PRESUPUESTO = ['Borrador', 'Pendiente', 'Enviado', 'Aceptado', 'Rechazado', 'Vencido', 'Convertido en obra'];
-const TIPOS_TRABAJO = ['Electricidad', 'Durlock', 'Gas', 'Pintura', 'Remodelación', 'Plomería', 'Albañilería', 'Otro'];
-
-const catalogTemplate = {
-  Electricidad: [
-    { descripcion: "Bocas de electricidad", price: 13300 },
-    { descripcion: "Tomas corrientes adicionales", price: 6500 },
-    { descripcion: "Teclas / Interruptores de luz", price: 4500 },
-    { descripcion: "Llaves térmicas", price: 15500 },
-    { descripcion: "Disyuntores diferenciales", price: 38000 },
-    { descripcion: "Metros de caño corrugado colocado", price: 1200 },
-    { descripcion: "Metros de cable 2.5mm pasado", price: 650 },
-    { descripcion: "Instalación de Tablero nuevo completo", price: 40000 },
-    { descripcion: "Colocación Luces LED", price: 3000 }
-  ],
-  Durlock: [
-    { descripcion: "Zócalo placas de yeso antihumedad, perfil de ajuste, 60 cm alto", price: 15500 },
-    { descripcion: "Colocación de tabique durlock placa std", price: 18500 },
-    { descripcion: "Cielo raso suspendido durlock completo", price: 22000 },
-    { descripcion: "Masillado y emplacado por metro cuadrado", price: 5500 }
-  ],
-  Pintura: [
-    { descripcion: "Reparación y masillado completo paredes, sellador fijador y 2 manos látex satinado", price: 13500 },
-    { descripcion: "Pintura aberturas sintético satinado", price: 33500 },
-    { descripcion: "Pintura látex exterior impermeabilizante", price: 16000 }
-  ],
-  Remodelación: [
-    { descripcion: "Colocación zócalo mdf pre pintado (metro lineal)", price: 5700 },
-    { descripcion: "Revestimiento cerámico completo", price: 28000 }
-  ],
-  Gas: [
-    { descripcion: "Instalación artefacto a gas", price: 18000 },
-    { descripcion: "Cañería de gas nueva (metro lineal)", price: 3500 },
-    { descripcion: "Certificación instalación gas", price: 12000 }
-  ],
-  Plomería: [
-    { descripcion: "Destape cloacal", price: 8000 },
-    { descripcion: "Cambio canilla / mezcladora", price: 6500 },
-    { descripcion: "Instalación caño nuevo (metro lineal)", price: 4200 }
-  ],
-  Albañilería: [
-    { descripcion: "Reparación grietas y humedad (metro cuadrado)", price: 9500 },
-    { descripcion: "Demolición tabique (metro cuadrado)", price: 7800 },
-    { descripcion: "Revoque grueso + fino (metro cuadrado)", price: 11500 }
-  ]
-};
 
 export default function Presupuestos() {
   const { 
     presupuestos, 
     clientes, 
+    productos,
     servicios, 
     config, 
     convertPresupuestoToObra,
@@ -93,6 +50,10 @@ export default function Presupuestos() {
   const [selectedClienteId, setSelectedClienteId] = useState('');
   const [tipoTrabajo, setTipoTrabajo] = useState('Electricidad');
   
+  // Catalog tab & filter inside step 2
+  const [catalogTab, setCatalogTab] = useState('servicios'); // 'servicios' | 'productos'
+  const [catalogSearch, setCatalogSearch] = useState('');
+  
   // Items in creation/editing
   const [items, setItems] = useState([]);
   const [manualItem, setManualItem] = useState({ descripcion: '', cantidad: 1, precioUnitario: 0 });
@@ -100,10 +61,6 @@ export default function Presupuestos() {
   const [desgloseEfectivo, setDesgloseEfectivo] = useState(0);
   const [desgloseCanje, setDesgloseCanje] = useState(0);
   const [estadoEdit, setEstadoEdit] = useState('Pendiente');
-
-  // Inline item editing state
-  const [editingItemId, setEditingItemId] = useState(null);
-  const [editingItemData, setEditingItemData] = useState({ descripcion: '', cantidad: 1, precioUnitario: 0 });
 
   // ─── Handlers ────────────────────────────────────────────────────────────
 
@@ -131,7 +88,7 @@ export default function Presupuestos() {
     setIsEditing(true);
     setSelectedClienteId(pres.clienteId);
     setTipoTrabajo(pres.tipoTrabajo);
-    setItems(pres.items.map(i => ({ ...i })));
+    setItems(consolidateItems(pres.items));
     setObservaciones(pres.observaciones);
     setDesgloseEfectivo(pres.desgloseEfectivo || 0);
     setDesgloseCanje(pres.desgloseCanje || 0);
@@ -140,17 +97,41 @@ export default function Presupuestos() {
     setIsCreating(true);
   };
 
+  /** Agrupa ítems con misma descripción y precio en una sola línea con cantidad total. */
+  const consolidateItems = (list) => {
+    const out = [];
+    (list || []).forEach(i => {
+      const existing = out.find(o =>
+        o.descripcion === (i.descripcion || '') &&
+        Math.abs(Number(o.precioUnitario) - Number(i.precioUnitario)) < 0.01
+      );
+      if (existing) {
+        existing.cantidad = Number(existing.cantidad) + Number(i.cantidad || 1);
+        existing.total = existing.cantidad * existing.precioUnitario;
+      } else {
+        out.push({
+          id: generateId(),
+          descripcion: i.descripcion || '',
+          cantidad: Number(i.cantidad || 1),
+          precioUnitario: Number(i.precioUnitario || 0),
+          total: Number(i.cantidad || 1) * Number(i.precioUnitario || 0),
+        });
+      }
+    });
+    return out;
+  };
+
   const handleDuplicate = async (pres) => {
     try {
       const saved = await savePresupuesto({
         ...pres,
         id: undefined,
-        numero: (presupuestos.length + 17).toString().padStart(5, '0'),
+        numero: (Math.max(0, ...presupuestos.map(p => parseInt(p.numero, 10) || 0)) + 1).toString().padStart(5, '0'),
         fecha: new Date().toISOString().split('T')[0],
         estado: 'Borrador',
         obraCreada: false,
         obraId: '',
-        items: (pres.items || []).map(i => ({ ...i, id: undefined })),
+        items: (pres.items || []).map(i => ({ ...i, id: generateId() })),
       });
       setSelectedPresupuesto(saved);
     } catch (err) {
@@ -158,28 +139,34 @@ export default function Presupuestos() {
     }
   };
 
+  /** Agrega un ítem consolidando por descripción + precio (acumula cantidad). */
+  const addConsolidatedItem = (desc, price, cant) => {
+    const qty = Number(cant) || 1;
+    const unit = Number(price) || 0;
+    setItems(prev => {
+      const existing = prev.find(i =>
+        i.descripcion === (desc || '') &&
+        Math.abs(Number(i.precioUnitario) - unit) < 0.01
+      );
+      if (existing) {
+        const newQty = Number(existing.cantidad) + qty;
+        return prev.map(i => i.id === existing.id
+          ? { ...i, cantidad: newQty, total: newQty * unit }
+          : i
+        );
+      }
+      return [...prev, { id: generateId(), descripcion: desc, cantidad: qty, precioUnitario: unit, total: qty * unit }];
+    });
+  };
+
   const handleAddTemplateItem = (desc, price, cant = 1) => {
-    const newItem = {
-      id: generateId(),
-      descripcion: desc,
-      cantidad: cant,
-      precioUnitario: price,
-      total: price * cant
-    };
-    setItems(prev => [...prev, newItem]);
+    addConsolidatedItem(desc, price, cant);
   };
 
   const handleAddManualItem = (e) => {
     e.preventDefault();
     if (!manualItem.descripcion || manualItem.precioUnitario <= 0) return;
-    const newItem = {
-      id: generateId(),
-      descripcion: manualItem.descripcion,
-      cantidad: Number(manualItem.cantidad),
-      precioUnitario: Number(manualItem.precioUnitario),
-      total: Number(manualItem.cantidad) * Number(manualItem.precioUnitario)
-    };
-    setItems(prev => [...prev, newItem]);
+    addConsolidatedItem(manualItem.descripcion, Number(manualItem.precioUnitario), Number(manualItem.cantidad));
     setManualItem({ descripcion: '', cantidad: 1, precioUnitario: 0 });
   };
 
@@ -187,20 +174,14 @@ export default function Presupuestos() {
     setItems(prev => prev.filter(i => i.id !== id));
   };
 
-  const handleStartEditItem = (item) => {
-    setEditingItemId(item.id);
-    setEditingItemData({ descripcion: item.descripcion, cantidad: item.cantidad, precioUnitario: item.precioUnitario });
-  };
-
-  const handleSaveEditItem = (itemId) => {
+  const handleUpdateItemQuantity = (itemId, cantidad) => {
+    const qty = Math.max(0, Number(cantidad) || 0);
     setItems(prev => prev.map(i => {
       if (i.id === itemId) {
-        const newTotal = Number(editingItemData.cantidad) * Number(editingItemData.precioUnitario);
-        return { ...i, ...editingItemData, cantidad: Number(editingItemData.cantidad), precioUnitario: Number(editingItemData.precioUnitario), total: newTotal };
+        return { ...i, cantidad: qty, total: qty * Number(i.precioUnitario) };
       }
       return i;
     }));
-    setEditingItemId(null);
   };
 
   const calculateSubtotal = () => items.reduce((acc, curr) => acc + curr.total, 0);
@@ -208,20 +189,34 @@ export default function Presupuestos() {
   const handleFinishPresupuesto = async () => {
     const cli = clientes.find(c => c.id === selectedClienteId);
     const sub = calculateSubtotal();
+    const efectivoVal = Number(desgloseEfectivo) || 0;
+    const canjeVal = Number(desgloseCanje) || 0;
+
+    if (Math.abs(efectivoVal + canjeVal - sub) > 0.01) {
+      alert(
+        `El desglose de pago debe cubrir el subtotal del presupuesto.\n\n` +
+        `Subtotal: $${sub.toLocaleString('es-AR')}\n` +
+        `Efectivo + Canje: $${(efectivoVal + canjeVal).toLocaleString('es-AR')}\n\n` +
+        `Ajustá los montos en Efectivo o Canje para continuar.`
+      );
+      return;
+    }
+
+    const existing = isEditing && editingId ? presupuestos.find(p => p.id === editingId) : null;
     const payload = {
       clienteId: selectedClienteId,
       clienteNombre: cli ? cli.nombre : 'Particular',
       tipoTrabajo,
       items,
       subtotal: sub,
-      desgloseEfectivo: Number(desgloseEfectivo) || sub,
-      desgloseCanje: Number(desgloseCanje) || 0,
+      desgloseEfectivo: efectivoVal,
+      desgloseCanje: canjeVal,
       observaciones,
       estado: isEditing ? estadoEdit : 'Pendiente',
-      fecha: new Date().toISOString().split('T')[0],
+      fecha: existing?.fecha || new Date().toISOString().split('T')[0],
       validez: `${config.validezPresupuesto} días hábiles`,
-      obraCreada: false,
-      obraId: '',
+      obraCreada: existing?.obraCreada || false,
+      obraId: existing?.obraId || '',
     };
 
     try {
@@ -259,6 +254,12 @@ export default function Presupuestos() {
   };
 
   const handleDeletePresupuesto = async (pres) => {
+    if (pres.obraCreada || pres.obraId) {
+      return alert(
+        `No se puede eliminar el Presupuesto #${pres.numero} porque fue convertido en obra.\n\n` +
+        `Se conserva el historial de la Obra ${pres.obraId ? 'y sus cobros asociados' : ''}.`
+      );
+    }
     if (!window.confirm(`¿Eliminar el Presupuesto #${pres.numero}? Esta acción no se puede deshacer.`)) return;
     try {
       await removePresupuesto(pres.id);
@@ -299,22 +300,24 @@ export default function Presupuestos() {
     }
   };
 
+  const [mobileView, setMobileView] = useState('list'); // 'list' | 'detail'
+
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       
       {/* HEADER SECTION (HIDDEN ON PRINT) */}
-      <div className="flex justify-between items-center no-print">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 no-print">
         <div>
-          <h2 className="text-2xl font-bold text-white">Presupuestos</h2>
-          <p className="text-gray-400 text-sm">Gestiona cotizaciones y conviértelas en obras activas.</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-white">Presupuestos</h2>
+          <p className="text-gray-400 text-xs sm:text-sm">Gestiona cotizaciones y conviértelas en obras activas.</p>
         </div>
         {!isCreating && (
           <button
             onClick={handleStartNew}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-lg shadow-blue-900/20"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-lg shadow-blue-900/20 text-xs sm:text-sm"
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
             Nuevo Presupuesto
           </button>
         )}
@@ -348,10 +351,10 @@ export default function Presupuestos() {
                 }`}>
                   {step > s ? <Check className="w-4 h-4" /> : s}
                 </div>
-                <span className={`text-xs font-semibold ${step === s ? 'text-blue-400' : 'text-gray-400'}`}>
+                <span className={`text-xs font-semibold hidden sm:block ${step === s ? 'text-blue-400' : 'text-gray-400'}`}>
                   {s === 1 ? 'Cliente y Tipo' : s === 2 ? 'Detalles e Ítems' : 'Resumen'}
                 </span>
-                {s < 3 && <div className="w-12 h-0.5 bg-[#334155]" />}
+                {s < 3 && <div className="w-8 sm:w-12 h-0.5 bg-[#334155]" />}
               </div>
             ))}
           </div>
@@ -375,7 +378,7 @@ export default function Presupuestos() {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-400 mb-2">Tipo de Trabajo</label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   {TIPOS_TRABAJO.map((tipo) => (
                     <button
                       key={tipo}
@@ -431,25 +434,133 @@ export default function Presupuestos() {
           {step === 2 && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               
-              {/* Catalog left */}
-              <div className="lg:col-span-5 bg-[#111827]/50 rounded-xl border border-[#334155] p-4">
-                <h4 className="font-bold text-white text-xs uppercase tracking-wider mb-3 flex items-center gap-1">
-                  <ClipboardList className="w-4 h-4 text-blue-400" />
-                  Catálogo: {tipoTrabajo}
-                </h4>
-                <div className="space-y-1.5 max-h-[350px] overflow-y-auto pr-1">
-                  {(catalogTemplate[tipoTrabajo] || []).map((t, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleAddTemplateItem(t.descripcion, t.price)}
-                      className="w-full flex items-center justify-between text-left p-2.5 bg-[#1e293b]/50 hover:bg-[#1e293b] text-xs rounded-lg border border-[#334155] text-gray-300 transition-colors"
-                    >
-                      <span className="font-medium shrink">{t.descripcion}</span>
-                      <span className="font-bold text-blue-400 ml-2 shrink-0">${t.price.toLocaleString('es-AR')}</span>
-                    </button>
-                  ))}
-                  {(!catalogTemplate[tipoTrabajo] || catalogTemplate[tipoTrabajo].length === 0) && (
-                    <p className="text-gray-500 text-xs py-4 text-center">No hay plantillas. Usa carga manual.</p>
+              {/* Catalog Panel */}
+              <div className="lg:col-span-5 bg-[#111827]/50 rounded-xl border border-[#334155] p-3 sm:p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <ClipboardList className="w-4 h-4 text-blue-400" />
+                    Catálogo de Insumos y Servicios
+                  </h4>
+                </div>
+
+                {/* Catalog Tabs */}
+                <div className="flex bg-[#0F1729] p-1 rounded-lg border border-[#334155] text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setCatalogTab('servicios')}
+                    className={`flex-1 py-1.5 rounded font-semibold transition-colors ${
+                      catalogTab === 'servicios' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Servicios ({servicios?.length || 0})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCatalogTab('productos')}
+                    className={`flex-1 py-1.5 rounded font-semibold transition-colors ${
+                      catalogTab === 'productos' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Insumos Stock ({productos?.length || 0})
+                  </button>
+                </div>
+
+                {/* Fast Search Filter */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Buscar servicio o insumo..."
+                    value={catalogSearch}
+                    onChange={(e) => setCatalogSearch(e.target.value)}
+                    className="w-full bg-[#0F1729] border border-[#334155] rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Items List per Tab */}
+                <div className="space-y-1.5 max-h-[300px] sm:max-h-[360px] overflow-y-auto pr-1">
+                  {/* TAB: SERVICIOS (SINGLE SOURCE OF TRUTH) */}
+                  {catalogTab === 'servicios' && (
+                    <>
+                      {(servicios || [])
+                        .filter(s => {
+                          const query = catalogSearch.toLowerCase();
+                          if (query) {
+                            return (s.nombre || '').toLowerCase().includes(query) || (s.categoria || '').toLowerCase().includes(query);
+                          }
+                          // Si no hay búsqueda, priorizar o listar por categoría del tipo de trabajo
+                          return true;
+                        })
+                        .map((s) => {
+                          const price = s.precioBase || s.precio || 0;
+                          const isCurrentCategory = (s.categoria || '').toLowerCase() === (tipoTrabajo || '').toLowerCase();
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onClick={() => handleAddTemplateItem(s.nombre, price)}
+                              className={`w-full flex items-center justify-between text-left p-2.5 text-xs rounded-lg border transition-colors group ${
+                                isCurrentCategory 
+                                  ? 'bg-[#16223F]/80 border-blue-500/40 text-white hover:bg-[#16223F]' 
+                                  : 'bg-[#1e293b]/50 hover:bg-[#1e293b] border-[#334155] text-gray-300'
+                              }`}
+                            >
+                              <div className="min-w-0 pr-2">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-medium truncate">{s.nombre}</span>
+                                  {s.categoria && (
+                                    <span className="text-[9px] bg-blue-900/30 text-blue-300 border border-blue-500/20 px-1.5 py-0.2 rounded shrink-0">
+                                      {s.categoria}
+                                    </span>
+                                  )}
+                                </div>
+                                {s.descripcion && <p className="text-[10px] text-gray-400 truncate mt-0.5">{s.descripcion}</p>}
+                              </div>
+                              <span className="font-bold text-blue-400 shrink-0 group-hover:text-blue-300">+ ${price.toLocaleString('es-AR')}</span>
+                            </button>
+                          );
+                        })}
+                      {(!servicios || servicios.length === 0) && (
+                        <p className="text-gray-500 text-xs py-4 text-center">No hay servicios cargados en Stock.</p>
+                      )}
+                    </>
+                  )}
+
+                  {/* TAB: PRODUCTOS DE STOCK */}
+                  {catalogTab === 'productos' && (
+                    <>
+                      {(productos || [])
+                        .filter(p => 
+                          (p.nombre || '').toLowerCase().includes(catalogSearch.toLowerCase()) || 
+                          (p.codigo || '').toLowerCase().includes(catalogSearch.toLowerCase()) ||
+                          (p.categoria || '').toLowerCase().includes(catalogSearch.toLowerCase())
+                        )
+                        .map((p) => {
+                          const price = p.precioVenta || p.costo || 0;
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => handleAddTemplateItem(`${p.nombre} [${p.codigo || 'SKU'}]`, price)}
+                              className="w-full flex items-center justify-between text-left p-2.5 bg-[#1e293b]/50 hover:bg-[#16223F] text-xs rounded-lg border border-[#334155] text-gray-300 transition-colors group"
+                            >
+                              <div className="min-w-0 pr-2">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-medium text-white truncate">{p.nombre}</span>
+                                  <span className="text-[9px] bg-gray-800 text-gray-400 border border-gray-700 px-1.5 py-0.2 rounded shrink-0">
+                                    {p.unidadMedida || 'unid'}
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-gray-400 mt-0.5">Stock dispo: {p.stockActual}</p>
+                              </div>
+                              <span className="font-bold text-yellow-400 shrink-0 group-hover:text-yellow-300">+ ${price.toLocaleString('es-AR')}</span>
+                            </button>
+                          );
+                        })}
+                      {(!productos || productos.length === 0) && (
+                        <p className="text-gray-500 text-xs py-4 text-center">No hay productos en stock.</p>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -459,10 +570,10 @@ export default function Presupuestos() {
                 {/* Manual form */}
                 <form onSubmit={handleAddManualItem} className="bg-[#111827]/30 border border-[#334155] p-4 rounded-xl grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                   <div className="md:col-span-6">
-                    <label className="block text-[10px] font-semibold text-gray-400 mb-1">Descripción de Ítem</label>
+                    <label className="block text-[10px] font-semibold text-gray-400 mb-1">Descripción</label>
                     <input
                       type="text"
-                      placeholder="Descripción personalizada..."
+                      placeholder="Ítem personalizado..."
                       value={manualItem.descripcion}
                       onChange={(e) => setManualItem(prev => ({ ...prev, descripcion: e.target.value }))}
                       className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none"
@@ -480,7 +591,7 @@ export default function Presupuestos() {
                     />
                   </div>
                   <div className="md:col-span-3">
-                    <label className="block text-[10px] font-semibold text-gray-400 mb-1">Precio Unit. ($)</label>
+                    <label className="block text-[10px] font-semibold text-gray-400 mb-1">P. Unit. ($)</label>
                     <input
                       type="number"
                       min="0"
@@ -496,197 +607,95 @@ export default function Presupuestos() {
                   </div>
                 </form>
 
-                {/* Items list with inline editing */}
+                {/* Items list */}
                 <div className="bg-[#111827]/60 border border-[#334155] rounded-xl p-4 space-y-3">
                   <h4 className="font-bold text-white text-xs">Ítems ({items.length})</h4>
-                  <div className="max-h-[240px] overflow-y-auto space-y-2 pr-1">
                     {items.length === 0 ? (
-                      <p className="text-gray-500 text-xs py-6 text-center">Agrega ítems desde la plantilla o el formulario manual.</p>
+                      <p className="text-gray-500 text-xs py-6 text-center">Sin ítems cargados.</p>
                     ) : (
                       items.map((item) => (
-                        <div key={item.id}>
-                          {editingItemId === item.id ? (
-                            // Inline edit row
-                            <div className="p-2 bg-[#16223F] rounded-lg border border-blue-500 space-y-2">
+                        <div key={item.id} className="flex justify-between items-center text-xs p-2 bg-[#1E293B] rounded-lg border border-[#334155] group">
+                          <div className="flex-1 min-w-0 pr-3">
+                            <p className="font-semibold text-white truncate">{item.descripcion}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
                               <input
-                                type="text"
-                                value={editingItemData.descripcion}
-                                onChange={e => setEditingItemData(p => ({ ...p, descripcion: e.target.value }))}
-                                className="w-full bg-[#0F1729] border border-[#334155] rounded px-2 py-1 text-xs text-white focus:outline-none"
+                                type="number"
+                                min="1"
+                                step="any"
+                                value={item.cantidad}
+                                onChange={(e) => handleUpdateItemQuantity(item.id, e.target.value)}
+                                className="w-16 bg-[#0F1729] border border-[#334155] rounded px-2 py-0.5 text-[10px] text-white focus:outline-none"
                               />
-                              <div className="flex gap-2 items-center">
-                                <input
-                                  type="number"
-                                  min="0.01"
-                                  step="any"
-                                  value={editingItemData.cantidad}
-                                  onChange={e => setEditingItemData(p => ({ ...p, cantidad: e.target.value }))}
-                                  className="w-20 bg-[#0F1729] border border-[#334155] rounded px-2 py-1 text-xs text-white focus:outline-none"
-                                  placeholder="Cant."
-                                />
-                                <span className="text-gray-500 text-xs">×</span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={editingItemData.precioUnitario}
-                                  onChange={e => setEditingItemData(p => ({ ...p, precioUnitario: e.target.value }))}
-                                  className="flex-1 bg-[#0F1729] border border-[#334155] rounded px-2 py-1 text-xs text-white focus:outline-none"
-                                  placeholder="Precio unit."
-                                />
-                                <span className="text-white text-xs font-bold shrink-0">
-                                  = ${(Number(editingItemData.cantidad) * Number(editingItemData.precioUnitario)).toLocaleString('es-AR')}
-                                </span>
-                                <button onClick={() => handleSaveEditItem(item.id)} className="bg-green-600 hover:bg-green-500 text-white p-1 rounded">
-                                  <Check className="w-3.5 h-3.5" />
-                                </button>
-                                <button onClick={() => setEditingItemId(null)} className="bg-[#334155] hover:bg-[#475569] text-gray-300 p-1 rounded">
-                                  <X className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
+                              <span className="text-[10px] text-gray-400">x ${Number(item.precioUnitario).toLocaleString('es-AR')}</span>
                             </div>
-                          ) : (
-                            // Normal row
-                            <div className="flex justify-between items-center text-xs p-2 bg-[#1E293B] rounded-lg border border-[#334155] group">
-                              <div className="flex-1 min-w-0 pr-3">
-                                <p className="font-semibold text-white truncate">{item.descripcion}</p>
-                                <p className="text-[10px] text-gray-400 mt-0.5">
-                                  {item.cantidad} x ${item.precioUnitario.toLocaleString('es-AR')}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <span className="font-bold text-white">${item.total.toLocaleString('es-AR')}</span>
-                                <button
-                                  onClick={() => handleStartEditItem(item)}
-                                  className="text-blue-400 hover:text-blue-300 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  title="Editar ítem"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => handleRemoveItem(item.id)}
-                                  className="text-red-400 hover:text-red-300 p-1"
-                                  title="Eliminar ítem"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
-                          )}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="font-bold text-white">${item.total.toLocaleString('es-AR')}</span>
+                            <button onClick={() => handleRemoveItem(item.id)} className="text-red-400 hover:text-red-300 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
                         </div>
                       ))
                     )}
                   </div>
-                  
-                  <div className="border-t border-[#334155] pt-3 flex justify-between items-center text-sm font-bold text-white">
-                    <span>Subtotal Estimado:</span>
-                    <span>${calculateSubtotal().toLocaleString('es-AR')}</span>
-                  </div>
                 </div>
 
                 <div className="flex justify-between pt-4">
-                  <button 
-                    onClick={() => setStep(1)} 
-                    className="flex items-center gap-2 px-4 py-2 border border-[#334155] rounded-lg text-xs font-bold text-gray-400 hover:text-white"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    Atrás
+                  <button onClick={() => setStep(1)} className="flex items-center gap-2 px-4 py-2 border border-[#334155] rounded-lg text-xs font-bold text-gray-400 hover:text-white">
+                    <ArrowLeft className="w-4 h-4" /> Atrás
                   </button>
                   <button 
-                    onClick={() => {
-                      setStep(3);
-                      if (!isEditing) {
-                        setDesgloseEfectivo(calculateSubtotal());
-                        setDesgloseCanje(0);
-                      }
-                    }} 
+                    onClick={() => { setStep(3); if (!isEditing) { setDesgloseEfectivo(calculateSubtotal()); setDesgloseCanje(0); } }} 
                     disabled={items.length === 0}
                     className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:opacity-50 text-white font-bold px-5 py-2 rounded-lg text-xs transition-colors"
                   >
-                    Continuar
-                    <ArrowRight className="w-4 h-4" />
+                    Continuar <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>
+            )}
 
-            </div>
-          )}
-
-          {/* ── STEP 3: SUMMARY & PAYMENT BREAKDOWN ── */}
+          {/* ── STEP 3: SUMMARY ── */}
           {step === 3 && (
             <div className="space-y-6 max-w-xl mx-auto">
               <div className="bg-[#111827]/40 p-4 rounded-xl border border-[#334155] space-y-4">
-                <h4 className="font-bold text-white text-xs">Condiciones de Pago — Desglose Final</h4>
-                
-                {/* Items summary */}
-                <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
-                  {items.map(item => (
-                    <div key={item.id} className="flex justify-between text-xs text-gray-300">
-                      <span className="truncate pr-2">{item.cantidad} × {item.descripcion}</span>
-                      <span className="font-semibold shrink-0">${item.total.toLocaleString('es-AR')}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="border-t border-[#334155] pt-2 flex justify-between text-sm font-bold text-white">
-                  <span>TOTAL</span>
-                  <span>${calculateSubtotal().toLocaleString('es-AR')}</span>
-                </div>
-
-                {/* Payment split */}
-                <div className="grid grid-cols-2 gap-4 pt-2">
+                <h4 className="font-bold text-white text-xs">Desglose de Pago</h4>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[11px] font-semibold text-gray-400 mb-1">Efectivo ($)</label>
-                    <input
-                      type="number"
-                      value={desgloseEfectivo}
-                      onChange={(e) => setDesgloseEfectivo(Number(e.target.value))}
-                      className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-xs text-white focus:outline-none"
-                    />
+                    <input type="number" value={desgloseEfectivo} onChange={(e) => setDesgloseEfectivo(Number(e.target.value))} className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-xs text-white" />
                   </div>
-
                   <div>
                     <label className="block text-[11px] font-semibold text-gray-400 mb-1">Canje ($)</label>
-                    <input
-                      type="number"
-                      value={desgloseCanje}
-                      onChange={(e) => setDesgloseCanje(Number(e.target.value))}
-                      className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-xs text-white focus:outline-none"
-                    />
+                    <input type="number" value={desgloseCanje} onChange={(e) => setDesgloseCanje(Number(e.target.value))} className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-xs text-white" />
                   </div>
                 </div>
-
-                <div className="flex justify-between items-center text-xs text-gray-300 font-semibold">
-                  <span>Suma desglose:</span>
-                  <span className={desgloseEfectivo + desgloseCanje === calculateSubtotal() ? "text-green-400" : "text-yellow-500"}>
-                    ${(desgloseEfectivo + desgloseCanje).toLocaleString('es-AR')}
-                    {desgloseEfectivo + desgloseCanje !== calculateSubtotal() && ' ⚠ No coincide con total'}
-                  </span>
-                </div>
+                {(() => {
+                  const totalDesglose = (Number(desgloseEfectivo) || 0) + (Number(desgloseCanje) || 0);
+                  const diff = Number(calculateSubtotal()) - totalDesglose;
+                  if (Math.abs(diff) < 0.01) {
+                    return (
+                      <p className="text-[11px] font-semibold text-green-400 mt-3">
+                        El desglose cubre el subtotal de ${Number(calculateSubtotal()).toLocaleString('es-AR')}.
+                      </p>
+                    );
+                  }
+                  const falta = diff > 0;
+                  return (
+                    <p className={`text-[11px] font-semibold mt-3 ${falta ? 'text-yellow-400' : 'text-red-400'}`}>
+                      {falta
+                        ? `Faltan $${diff.toLocaleString('es-AR')} para cubrir el subtotal de $${Number(calculateSubtotal()).toLocaleString('es-AR')}.`
+                        : `El desglose supera el subtotal en $${Math.abs(diff).toLocaleString('es-AR')}.`}
+                    </p>
+                  );
+                })()}
               </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 mb-1.5">Condiciones y Notas</label>
-                <textarea
-                  rows={3}
-                  value={observaciones}
-                  onChange={(e) => setObservaciones(e.target.value)}
-                  className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-4 py-2.5 text-xs text-white focus:outline-none"
-                />
-              </div>
-
+              <textarea rows={3} value={observaciones} onChange={(e) => setObservaciones(e.target.value)} className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-4 py-2.5 text-xs text-white" placeholder="Observaciones..." />
               <div className="flex justify-between pt-4">
-                <button 
-                  onClick={() => setStep(2)} 
-                  className="flex items-center gap-2 px-4 py-2 border border-[#334155] rounded-lg text-xs font-bold text-gray-400 hover:text-white"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  Atrás
+                <button onClick={() => setStep(2)} className="flex items-center gap-2 px-4 py-2 border border-[#334155] rounded-lg text-xs font-bold text-gray-400 hover:text-white">
+                  <ArrowLeft className="w-4 h-4" /> Atrás
                 </button>
-                <button 
-                  onClick={handleFinishPresupuesto}
-                  className="bg-green-600 hover:bg-green-500 text-white font-bold px-6 py-2 rounded-lg text-xs transition-colors flex items-center gap-2"
-                >
-                  <Check className="w-4 h-4" />
-                  {isEditing ? 'Guardar Cambios' : 'Generar Presupuesto'}
+                <button onClick={handleFinishPresupuesto} className="bg-green-600 hover:bg-green-500 text-white font-bold px-6 py-2 rounded-lg text-xs transition-colors flex items-center gap-2">
+                  <Check className="w-4 h-4" /> {isEditing ? 'Guardar Cambios' : 'Generar Presupuesto'}
                 </button>
               </div>
             </div>
@@ -695,13 +704,15 @@ export default function Presupuestos() {
         </div>
       )}
 
-      {/* ─── LIST + DETAIL PANEL ─────────────────────────────────────────── */}
+      {/* ─── LIST + DETAIL VIEW (WHEN NOT CREATING) ── */}
       {!isCreating && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 no-print">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 min-h-[calc(100vh-12rem)]">
           
-          {/* List left */}
-          <div className="lg:col-span-5 bg-[#1E293B] border border-[#334155] rounded-xl p-6 space-y-4 shadow-lg">
-            <div className="flex items-center justify-between">
+          {/* LEFT LIST PANEL */}
+          <div className={`lg:col-span-5 bg-[#1E293B] rounded-xl border border-[#334155] p-4 sm:p-6 flex flex-col shadow-lg ${
+            mobileView === 'detail' ? 'hidden lg:flex' : 'flex'
+          }`}>
+            <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-white text-base">Historial</h3>
               <select
                 value={statusFilter}
@@ -713,27 +724,22 @@ export default function Presupuestos() {
               </select>
             </div>
 
-            {/* Search */}
-            <div className="relative">
+            <div className="relative mb-4">
               <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
               <input
                 type="text"
-                placeholder="Buscar por cliente, número o tipo..."
+                placeholder="Buscar..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-[#0F1729] border border-[#334155] rounded-lg pl-9 pr-4 py-2 text-xs text-white focus:outline-none"
               />
             </div>
 
-            {/* List */}
-            <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
-              {filteredPresupuestos.length === 0 && (
-                <p className="text-center text-gray-500 text-xs py-8">No hay presupuestos que coincidan.</p>
-              )}
+            <div className="space-y-2 overflow-y-auto flex-1">
               {filteredPresupuestos.map(p => (
                 <div
                   key={p.id}
-                  onClick={() => setSelectedPresupuesto(p)}
+                  onClick={() => { setSelectedPresupuesto(p); setMobileView('detail'); }}
                   className={`p-3.5 rounded-lg border transition-all cursor-pointer flex items-center justify-between ${
                     selectedPresupuesto?.id === p.id 
                       ? 'bg-[#16223F] border-blue-500 shadow-md' 
@@ -741,26 +747,25 @@ export default function Presupuestos() {
                   }`}
                 >
                   <div>
-                    <h4 className="font-bold text-white text-sm">Presupuesto #{p.numero}</h4>
-                    <p className="text-xs text-gray-400 mt-1">{p.clienteNombre}</p>
-                    <span className="inline-block mt-2 text-[9px] bg-blue-900/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20 font-semibold">
-                      {p.tipoTrabajo}
-                    </span>
+                    <h4 className="font-bold text-white text-sm">#{p.numero}</h4>
+                    <p className="text-xs text-gray-400">{p.clienteNombre}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-bold text-white">${p.subtotal.toLocaleString('es-AR')}</p>
-                    <span className={`inline-block mt-2 text-[9px] px-2 py-0.5 rounded border font-bold ${estadoColor(p.estado)}`}>
+                    <span className={`inline-block mt-1 text-[9px] px-2 py-0.5 rounded border font-bold ${estadoColor(p.estado)}`}>
                       {p.estado}
                     </span>
-                    <p className="text-[9px] text-gray-500 mt-1">{new Date(p.fecha).toLocaleDateString('es-AR')}</p>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Detail right */}
-          <div className="lg:col-span-7">
+          {/* RIGHT DETAIL PANEL */}
+          <div className={`lg:col-span-7 ${
+            mobileView === 'list' && !selectedPresupuesto ? 'hidden lg:block' : 
+            mobileView === 'list' ? 'hidden lg:block' : 'block'
+          }`}>
             {!selectedPresupuesto ? (
               <div className="bg-[#1E293B] rounded-xl border border-[#334155] p-6 h-full flex flex-col items-center justify-center text-center shadow-lg text-gray-500">
                 <FileText className="w-12 h-12 mb-3 text-gray-600" />
@@ -769,6 +774,13 @@ export default function Presupuestos() {
             ) : (
               <div className="bg-[#1E293B] rounded-xl border border-[#334155] p-6 shadow-lg space-y-6">
                 
+                <button
+                  onClick={() => { setSelectedPresupuesto(null); setMobileView('list'); }}
+                  className="lg:hidden flex items-center gap-2 text-blue-400 text-xs font-semibold mb-3"
+                >
+                  <ArrowLeft className="w-4 h-4" /> Volver al listado
+                </button>
+
                 {/* Actions */}
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#334155] pb-4">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -843,6 +855,7 @@ export default function Presupuestos() {
                       className="flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold px-3 py-1.5 rounded-lg text-xs transition-colors border border-red-500/20"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
+                      Eliminar
                     </button>
                   </div>
                 </div>
@@ -922,11 +935,9 @@ export default function Presupuestos() {
                     <p className="mt-2 text-gray-400">Cotización válida por {selectedPresupuesto.validez}. Firma: Alexis Jofré.</p>
                   </div>
                 </div>
-
               </div>
             )}
           </div>
-
         </div>
       )}
 

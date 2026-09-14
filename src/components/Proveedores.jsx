@@ -11,11 +11,12 @@ import {
   Edit3, 
   Check, 
   X,
-  FileText
+  FileText,
+  Trash2
 } from 'lucide-react';
 
 export default function Proveedores() {
-  const { proveedores, createProveedor, saveProveedor } = useApp();
+  const { proveedores, createProveedor, saveProveedor, removeProveedor } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProveedor, setSelectedProveedor] = useState(null);
   
@@ -55,25 +56,40 @@ export default function Proveedores() {
     }
   };
 
-  const filteredProv = proveedores.filter(p => 
-    p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.rubro.toLowerCase().includes(searchTerm.toLowerCase())
+  const handleDeleteProveedor = async (p) => {
+    if (!window.confirm(`¿Eliminar al proveedor "${p.nombre}"? Esta acción no se puede deshacer.`)) return;
+    try {
+      await removeProveedor(p.id);
+      setSelectedProveedor(null);
+      setMobileView('list');
+    } catch (err) {
+      alert(err.message || 'No se pudo eliminar el proveedor.');
+    }
+  };
+
+  const [mobileView, setMobileView] = useState('list'); // 'list' | 'detail'
+
+  const filteredProveedores = proveedores.filter(p => 
+    (p.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (p.rubro || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[calc(100vh-10rem)]">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 min-h-[calc(100vh-10rem)]">
       
-      {/* LEFT COLUMN: LIST OF SUPPLIERS */}
-      <div className="lg:col-span-5 bg-[#1E293B] rounded-xl border border-[#334155] p-6 flex flex-col justify-between shadow-lg">
+      {/* LEFT COLUMN: LIST OF PROVIDERS */}
+      <div className={`lg:col-span-5 bg-[#1E293B] rounded-xl border border-[#334155] p-4 sm:p-6 flex flex-col justify-between shadow-lg ${
+        mobileView === 'detail' ? 'hidden lg:flex' : 'flex'
+      }`}>
         <div>
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-white">Proveedores</h3>
+          <div className="flex justify-between items-center mb-4 sm:mb-6">
+            <h3 className="text-base sm:text-lg font-bold text-white">Proveedores</h3>
             <button
               onClick={() => setIsModalOpen(true)}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg transition-colors"
             >
               <Plus className="w-4 h-4" />
-              Nuevo Proveedor
+              Nuevo
             </button>
           </div>
 
@@ -89,20 +105,16 @@ export default function Proveedores() {
             />
           </div>
 
-          {/* Providers List */}
-          <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
-            {filteredProv.length === 0 ? (
+          {/* List scroll container */}
+          <div className="space-y-2 overflow-y-auto max-h-[450px] pr-1">
+            {filteredProveedores.length === 0 ? (
               <p className="text-gray-500 text-xs py-8 text-center">No se encontraron proveedores.</p>
             ) : (
-              filteredProv.map((p) => (
+              filteredProveedores.map((p) => (
                 <div
                   key={p.id}
-                  onClick={() => { 
-                    setSelectedProveedor(p); 
-                    setEditingNotes(p.notes || p.notas || '');
-                    setIsEditingNotes(false);
-                  }}
-                  className={`p-4 rounded-lg border transition-all cursor-pointer flex items-center justify-between ${
+                  onClick={() => { setSelectedProveedor(p); setMobileView('detail'); }}
+                  className={`p-3.5 rounded-lg border transition-all cursor-pointer flex items-center justify-between ${
                     selectedProveedor?.id === p.id 
                       ? 'bg-[#16223F] border-blue-500 shadow-md' 
                       : 'bg-[#111827]/60 border-[#334155] hover:bg-[#16223F]/40'
@@ -127,122 +139,142 @@ export default function Proveedores() {
         </div>
       </div>
 
-      {/* RIGHT COLUMN: SUPPLIER PROFILE & EDITABLE NOTES */}
-      <div className="lg:col-span-7">
+      {/* RIGHT COLUMN: PROVIDER FILE */}
+      <div className={`lg:col-span-7 ${
+        mobileView === 'list' && !selectedProveedor ? 'hidden lg:block' : 
+        mobileView === 'list' ? 'hidden lg:block' : 'block'
+      }`}>
         {!selectedProveedor ? (
           <div className="bg-[#1E293B] rounded-xl border border-[#334155] p-6 h-full flex flex-col items-center justify-center text-center shadow-lg text-gray-500">
             <Truck className="w-12 h-12 mb-3 text-gray-600" />
-            <p className="text-sm">Selecciona un proveedor para ver sus datos de contacto y gestionar sus notas de cotización.</p>
+            <p className="text-sm">Selecciona un proveedor para ver sus datos de contacto y catálogo habitual de compras.</p>
           </div>
         ) : (
-          <div className="bg-[#1E293B] rounded-xl border border-[#334155] overflow-hidden shadow-lg p-6 space-y-6 h-full flex flex-col justify-between">
+          <div className="bg-[#1E293B] rounded-xl border border-[#334155] overflow-hidden shadow-lg flex flex-col justify-between h-full">
+            {/* Back button on mobile */}
+            <div className="lg:hidden p-3 border-b border-[#334155] bg-[#111827]/40">
+              <button
+                onClick={() => setMobileView('list')}
+                className="flex items-center gap-2 text-blue-400 text-xs font-semibold"
+              >
+                ← Volver a proveedores
+              </button>
+            </div>
             
-            {/* General Info block */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 border-b border-[#334155] pb-4">
-                <div className="w-12 h-12 rounded-xl bg-blue-600/10 text-blue-400 flex items-center justify-center">
-                  <Truck className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-xl font-bold text-white">{selectedProveedor.nombre}</h3>
-                  <p className="text-xs text-blue-400 font-semibold">{selectedProveedor.rubro}</p>
-                </div>
-              </div>
-
-              {/* Contact Data */}
-              <div className="bg-[#111827]/40 rounded-xl p-4 border border-[#334155] grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-gray-300">
-                <div className="flex items-center gap-2">
-                  <Phone className="w-4 h-4 text-gray-500" />
-                  <span>Tel: {selectedProveedor.telefono || 'No registrado'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Mail className="w-4 h-4 text-gray-500" />
-                  <span>Email: {selectedProveedor.email || 'No registrado'}</span>
-                </div>
-                {selectedProveedor.direccion && (
-                  <div className="flex items-center gap-2 md:col-span-2">
-                    <MapPin className="w-4 h-4 text-gray-500" />
-                    <span>Dir: {selectedProveedor.direccion}</span>
+            <div className="p-6 space-y-6 flex flex-col">
+              {/* General Info block */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 border-b border-[#334155] pb-4">
+                  <div className="w-12 h-12 rounded-xl bg-blue-600/10 text-blue-400 flex items-center justify-center">
+                    <Truck className="w-6 h-6" />
                   </div>
-                )}
-                {selectedProveedor.cuit && (
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-gray-500">CUIT:</span>
-                    <span>{selectedProveedor.cuit}</span>
+                  <div>
+                    <h3 className="text-xl font-bold text-white">{selectedProveedor.nombre}</h3>
+                    <p className="text-xs text-blue-400 font-semibold">{selectedProveedor.rubro}</p>
                   </div>
-                )}
-                {selectedProveedor.contacto && (
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-gray-500">Contacto:</span>
-                    <span>{selectedProveedor.contacto}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* EDITABLE INTERNAL NOTES FOR QUOTATIONS (LARGE EDITOR) */}
-            <div className="flex-1 flex flex-col justify-between mt-4">
-              <div className="flex justify-between items-center mb-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-                  <FileText className="w-4 h-4 text-blue-400" />
-                  Notas de Tarifas y Logística
-                </h4>
-                {!isEditingNotes ? (
-                  <button 
-                    onClick={() => { setIsEditingNotes(true); setEditingNotes(selectedProveedor.notas || ''); }}
-                    className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 font-semibold"
+                  <button
+                    onClick={() => handleDeleteProveedor(selectedProveedor)}
+                    className="ml-auto flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold px-3 py-1.5 rounded-lg text-xs transition-colors border border-red-500/20"
                   >
-                    <Edit3 className="w-3.5 h-3.5" />
-                    Editar Notas
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Eliminar
                   </button>
+                </div>
+
+                {/* Contact Data */}
+                <div className="bg-[#111827]/40 rounded-xl p-4 border border-[#334155] grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-gray-300">
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-gray-500" />
+                    <span>Tel: {selectedProveedor.telefono || 'No registrado'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-gray-500" />
+                    <span>Email: {selectedProveedor.email || 'No registrado'}</span>
+                  </div>
+                  {selectedProveedor.direccion && (
+                    <div className="flex items-center gap-2 md:col-span-2">
+                      <MapPin className="w-4 h-4 text-gray-500" />
+                      <span>Dir: {selectedProveedor.direccion}</span>
+                    </div>
+                  )}
+                  {selectedProveedor.cuit && (
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-gray-500">CUIT:</span>
+                      <span>{selectedProveedor.cuit}</span>
+                    </div>
+                  )}
+                  {selectedProveedor.contacto && (
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-gray-500">Contacto:</span>
+                      <span>{selectedProveedor.contacto}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* EDITABLE INTERNAL NOTES */}
+              <div className="flex-1 flex flex-col">
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-blue-400" />
+                    Notas de Tarifas y Logística
+                  </h4>
+                  {!isEditingNotes ? (
+                    <button 
+                      onClick={() => { setIsEditingNotes(true); setEditingNotes(selectedProveedor.notas || ''); }}
+                      className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 font-semibold"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      Editar Notas
+                    </button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button onClick={handleSaveNotes} className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300 font-semibold">
+                        <Check className="w-3.5 h-3.5" />
+                        Guardar
+                      </button>
+                      <button onClick={() => setIsEditingNotes(false)} className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 font-semibold">
+                        <X className="w-3.5 h-3.5" />
+                        Cancelar
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {isEditingNotes ? (
+                  <textarea
+                    rows={8}
+                    value={editingNotes}
+                    onChange={(e) => setEditingNotes(e.target.value)}
+                    className="w-full bg-[#0F1729] border border-[#334155] rounded-xl p-4 text-xs text-white focus:outline-none focus:border-blue-500 resize-none flex-1"
+                    placeholder="Detalla qué conviene comprarle a este proveedor, condiciones de pago..."
+                  />
                 ) : (
-                  <div className="flex gap-2">
-                    <button onClick={handleSaveNotes} className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300 font-semibold">
-                      <Check className="w-3.5 h-3.5" />
-                      Guardar
-                    </button>
-                    <button onClick={() => setIsEditingNotes(false)} className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 font-semibold">
-                      <X className="w-3.5 h-3.5" />
-                      Cancelar
-                    </button>
+                  <div className="w-full bg-[#111827]/30 border border-[#334155] rounded-xl p-4 text-xs text-gray-300 min-h-[160px] whitespace-pre-line leading-relaxed flex-1">
+                    {selectedProveedor.notas || 'No hay notas internas cargadas para este proveedor.'}
                   </div>
                 )}
               </div>
-
-              {isEditingNotes ? (
-                <textarea
-                  rows={8}
-                  value={editingNotes}
-                  onChange={(e) => setEditingNotes(e.target.value)}
-                  className="w-full bg-[#0F1729] border border-[#334155] rounded-xl p-4 text-xs text-white focus:outline-none focus:border-blue-500 resize-none flex-1"
-                  placeholder="Detalla qué conviene comprarle a este proveedor, condiciones de pago, listas de precios, descuentos especiales por volumen..."
-                />
-              ) : (
-                <div className="w-full bg-[#111827]/30 border border-[#334155] rounded-xl p-4 text-xs text-gray-300 min-h-[160px] whitespace-pre-line leading-relaxed flex-1">
-                  {selectedProveedor.notas || 'No hay notas internas cargadas para este proveedor.'}
-                </div>
-              )}
             </div>
-
           </div>
         )}
       </div>
 
-      {/* QUICK SUPPLIER CREATION MODAL (Layout structure matching Image 5 re-skinned) */}
+      {/* CREATE PROVIDER MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-[#1E293B] border border-[#334155] rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-[#334155] flex justify-between items-center bg-[#111827]/40">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+          <div className="bg-[#1E293B] border border-[#334155] rounded-t-2xl sm:rounded-2xl w-full sm:max-w-xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:fade-in sm:zoom-in-95 duration-200">
+            <div className="p-4 sm:p-6 border-b border-[#334155] flex justify-between items-center bg-[#111827]/40">
               <div>
-                <h3 className="font-bold text-white text-base">Nuevo Proveedor</h3>
-                <p className="text-xs text-gray-400">Introduce los campos del proveedor del sistema</p>
+                <h3 className="font-bold text-white text-sm sm:text-base">Nuevo Proveedor</h3>
+                <p className="text-xs text-gray-400 hidden sm:block">Completa los datos de la empresa proveedora de insumos</p>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white p-1 rounded-lg">
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white p-2 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateProv} className="p-6 space-y-4 text-xs">
+            <form onSubmit={handleCreateProv} className="p-4 sm:p-6 space-y-3 sm:space-y-4 text-xs overflow-y-auto max-h-[75vh] sm:max-h-[80vh]">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
                 <div>

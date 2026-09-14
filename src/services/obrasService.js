@@ -45,7 +45,11 @@ async function fetchObraRelations(obraIds) {
 
 export async function fetchObras() {
   const supabase = getSupabaseOrThrow();
-  const { data, error } = await supabase.from('obras').select('*').order('created_at', { ascending: false });
+  const { data, error } = await supabase
+    .from('obras')
+    .select('*')
+    .eq('eliminada', false)
+    .order('created_at', { ascending: false });
   const serviceError = handleSupabaseError(error);
   if (serviceError) throw serviceError;
 
@@ -59,7 +63,12 @@ export async function fetchObras() {
 
 export async function fetchObraById(id) {
   const supabase = getSupabaseOrThrow();
-  const { data, error } = await supabase.from('obras').select('*').eq('id', id).single();
+  const { data, error } = await supabase
+    .from('obras')
+    .select('*')
+    .eq('id', id)
+    .eq('eliminada', false)
+    .single();
   const serviceError = handleSupabaseError(error);
   if (serviceError) throw serviceError;
 
@@ -103,6 +112,20 @@ export async function updateObra(id, obra) {
   return fetchObraById(data.id);
 }
 
+/** Eliminación lógica: oculta la obra de la gestión activa sin borrar historial. */
+export async function softDeleteObra(id) {
+  const supabase = getSupabaseOrThrow();
+  const { data, error } = await supabase
+    .from('obras')
+    .update({ eliminada: true })
+    .eq('id', id)
+    .select('*')
+    .single();
+  const serviceError = handleSupabaseError(error);
+  if (serviceError) throw serviceError;
+  return data;
+}
+
 export async function addObraBitacora(obraId, entry, usuarioNombre) {
   const supabase = getSupabaseOrThrow();
   const { error } = await supabase.from('bitacora').insert({
@@ -112,6 +135,7 @@ export async function addObraBitacora(obraId, entry, usuarioNombre) {
     descripcion: entry.descripcion,
     foto_url: entry.fotoUrl || null,
     usuario_nombre: usuarioNombre,
+    ...(entry.fecha ? { fecha: entry.fecha } : {}),
   });
   const serviceError = handleSupabaseError(error);
   if (serviceError) throw serviceError;

@@ -1,22 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { defaultPageForRole } from './utils/permissions';
+import { defaultPageForRole, canRoleAccess } from './utils/permissions';
 import Login from './components/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 
 import Sidebar from './components/Sidebar';
-import Dashboard from './components/Dashboard';
-import Clientes from './components/Clientes';
-import Presupuestos from './components/Presupuestos';
-import Obras from './components/Obras';
-import Cobros from './components/Cobros';
-import Stock from './components/Stock';
-import Proveedores from './components/Proveedores';
-import Agenda from './components/Agenda';
-import Tecnicos from './components/Tecnicos';
-import Estadisticas from './components/Estadisticas';
-import Configuracion from './components/Configuracion';
+
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const Clientes = lazy(() => import('./components/Clientes'));
+const Presupuestos = lazy(() => import('./components/Presupuestos'));
+const Obras = lazy(() => import('./components/Obras'));
+const Cobros = lazy(() => import('./components/Cobros'));
+const Stock = lazy(() => import('./components/Stock'));
+const Servicios = lazy(() => import('./components/Servicios'));
+const Proveedores = lazy(() => import('./components/Proveedores'));
+const Agenda = lazy(() => import('./components/Agenda'));
+const Tecnicos = lazy(() => import('./components/Tecnicos'));
+const Estadisticas = lazy(() => import('./components/Estadisticas'));
+const Configuracion = lazy(() => import('./components/Configuracion'));
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center py-20 text-gray-400 text-xs font-semibold">
+      Cargando...
+    </div>
+  );
+}
 
 import { Search, Bell, Menu, X } from 'lucide-react';
 
@@ -28,6 +38,7 @@ const PAGE_NAMES = {
   obras: 'Obras',
   cobros: 'Cobros',
   stock: 'Stock',
+  servicios: 'Servicios',
   proveedores: 'Proveedores',
   tecnicos: 'Técnicos',
   estadisticas: 'Estadísticas',
@@ -81,38 +92,49 @@ function DashboardLayout() {
     if (!globalSearch) return [];
     const query = globalSearch.toLowerCase();
     const results = [];
+    const rol = user?.rol;
 
     // Search Customers
-    clientes.forEach(c => {
-      if (c.nombre?.toLowerCase().includes(query)) {
-        results.push({ type: 'Cliente', title: c.nombre, item: c, page: 'clientes' });
-      }
-    });
+    if (canRoleAccess(rol, PAGE_NAMES['clientes'])) {
+      clientes.forEach(c => {
+        if (c.nombre?.toLowerCase().includes(query)) {
+          results.push({ type: 'Cliente', title: c.nombre, item: c, page: 'clientes' });
+        }
+      });
+    }
 
-    presupuestos.forEach(p => {
-      if (p.numero?.includes(query) || p.clienteNombre?.toLowerCase().includes(query)) {
-        results.push({ type: 'Presupuesto', title: `Presupuesto #${p.numero} (${p.clienteNombre})`, item: p, page: 'presupuestos' });
-      }
-    });
+    if (canRoleAccess(rol, PAGE_NAMES['presupuestos'])) {
+      presupuestos.forEach(p => {
+        if (p.numero?.includes(query) || p.clienteNombre?.toLowerCase().includes(query)) {
+          results.push({ type: 'Presupuesto', title: `Presupuesto #${p.numero} (${p.clienteNombre})`, item: p, page: 'presupuestos' });
+        }
+      });
+    }
 
-    obras.forEach(o => {
-      if (o.numero?.includes(query) || o.clienteNombre?.toLowerCase().includes(query)) {
-        results.push({ type: 'Obra', title: `Obra #${o.numero} - ${o.clienteNombre}`, item: o, page: 'obras' });
-      }
-    });
+    if (canRoleAccess(rol, PAGE_NAMES['obras'])) {
+      obras.forEach(o => {
+        if (o.numero?.includes(query) || o.clienteNombre?.toLowerCase().includes(query)) {
+          results.push({ type: 'Obra', title: `Obra #${o.numero} - ${o.clienteNombre}`, item: o, page: 'obras' });
+        }
+      });
+    }
 
-    productos.forEach(p => {
-      if (p.nombre?.toLowerCase().includes(query) || p.codigo?.toLowerCase().includes(query)) {
-        results.push({ type: 'Stock Insumo', title: `${p.nombre} [${p.codigo}]`, item: p, page: 'stock' });
-      }
-    });
+    if (canRoleAccess(rol, PAGE_NAMES['stock'])) {
+      productos.forEach(p => {
+        if (p.nombre?.toLowerCase().includes(query) || p.codigo?.toLowerCase().includes(query)) {
+          results.push({ type: 'Stock Insumo', title: `${p.nombre} [${p.codigo}]`, item: p, page: 'stock' });
+        }
+      });
+    }
 
     // Search Providers
-    proveedores.forEach(p => {
-      if (p.nombre.toLowerCase().includes(query) || p.rubro.toLowerCase().includes(query)) {
-        results.push({ type: 'Proveedor', title: p.nombre, item: p, page: 'proveedores' });
-      }
-    });
+    if (canRoleAccess(rol, PAGE_NAMES['proveedores'])) {
+      proveedores.forEach(p => {
+        if (p.nombre?.toLowerCase().includes(query) || p.rubro?.toLowerCase().includes(query)) {
+          results.push({ type: 'Proveedor', title: p.nombre, item: p, page: 'proveedores' });
+        }
+      });
+    }
 
     return results.slice(0, 8);
   };
@@ -150,6 +172,9 @@ function DashboardLayout() {
       case 'stock':
         Component = <Stock />;
         break;
+      case 'servicios':
+        Component = <Servicios />;
+        break;
       case 'proveedores':
         Component = <Proveedores />;
         break;
@@ -168,7 +193,9 @@ function DashboardLayout() {
 
     return (
       <ProtectedRoute pageName={activePageName} onNavigateBack={() => setCurrentPage(defaultPageForRole(user?.rol))}>
-        {Component}
+        <Suspense fallback={<PageLoader />}>
+          {Component}
+        </Suspense>
       </ProtectedRoute>
     );
   };
@@ -202,7 +229,7 @@ function DashboardLayout() {
       <div className="flex-1 flex flex-col min-w-0">
         
         {/* Global Header (Hidden on print) */}
-        <header className="h-16 border-b border-[#1E293B] bg-[#0F1729]/90 backdrop-blur-md flex items-center justify-between px-6 sticky top-0 z-30 no-print">
+        <header className="h-14 sm:h-16 border-b border-[#1E293B] bg-[#0F1729]/90 backdrop-blur-md flex items-center justify-between px-3 sm:px-6 sticky top-0 z-30 no-print">
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsMobileSidebarOpen(true)}
@@ -210,13 +237,13 @@ function DashboardLayout() {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <h1 className="font-extrabold text-white text-base tracking-wide uppercase hidden sm:block">
-              {currentPage === 'dashboard' ? 'Panel de Control' : currentPage}
+            <h1 className="font-extrabold text-white text-sm sm:text-base tracking-wide uppercase block">
+              {currentPage === 'dashboard' ? 'Panel' : PAGE_NAMES[currentPage] || currentPage}
             </h1>
           </div>
 
           {/* Search bar & notification buttons */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             
             {/* Universal Search input container */}
             <div className="relative">
@@ -224,17 +251,17 @@ function DashboardLayout() {
                 <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
-                  placeholder="Buscador global..."
+                  placeholder="Buscar..."
                   value={globalSearch}
                   onChange={(e) => { setGlobalSearch(e.target.value); setShowSearchResults(true); }}
                   onFocus={() => setShowSearchResults(true)}
-                  className="bg-[#1E293B] border border-[#334155] rounded-xl pl-9 pr-4 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none w-48 sm:w-64 focus:border-blue-500 focus:w-80 transition-all duration-300"
+                  className="bg-[#1E293B] border border-[#334155] rounded-xl pl-9 pr-2 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none w-28 sm:w-48 md:w-64 focus:border-blue-500 sm:focus:w-72 transition-all duration-300"
                 />
               </div>
 
               {/* Float Search Dropdown */}
               {showSearchResults && globalSearch && (
-                <div className="absolute right-0 mt-2 bg-[#1E293B] border border-[#334155] rounded-xl shadow-2xl w-80 overflow-hidden z-50">
+                <div className="absolute right-0 mt-2 bg-[#1E293B] border border-[#334155] rounded-xl shadow-2xl w-72 sm:w-80 overflow-hidden z-50" style={{maxWidth: 'calc(100vw - 1rem)'}}>
                   <div className="p-3 border-b border-[#334155] bg-[#111827]/60 flex items-center justify-between text-[10px] text-gray-400 font-bold uppercase tracking-wider">
                     <span>Resultados de búsqueda</span>
                     <button onClick={() => setShowSearchResults(false)} className="text-gray-500 hover:text-white">
@@ -272,7 +299,7 @@ function DashboardLayout() {
         </header>
 
         {/* Dynamic Component Wrapper */}
-        <main className="p-6 flex-1 bg-[#0F1729] relative">
+        <main className="p-3 sm:p-4 lg:p-6 flex-1 bg-[#0F1729] relative">
           {dataError && (
             <div className="mb-4 bg-red-500/10 border border-red-500/30 text-red-300 text-xs rounded-xl px-4 py-3 flex items-center justify-between gap-3">
               <span>{dataError}</span>

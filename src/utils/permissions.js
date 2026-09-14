@@ -1,11 +1,11 @@
 export const ROLE_PERMISSIONS = {
   Administrador: [
     'Dashboard', 'Agenda', 'Clientes', 'Presupuestos', 'Obras', 'Cobros',
-    'Stock', 'Proveedores', 'Técnicos', 'Estadísticas', 'Configuración',
+    'Stock', 'Servicios', 'Proveedores', 'Técnicos', 'Estadísticas', 'Configuración',
   ],
   Administrativo: [
     'Dashboard', 'Agenda', 'Clientes', 'Presupuestos', 'Obras', 'Cobros',
-    'Stock', 'Proveedores', 'Estadísticas',
+    'Stock', 'Servicios', 'Proveedores', 'Estadísticas',
   ],
   Técnico: ['Agenda', 'Obras', 'Stock'],
 };

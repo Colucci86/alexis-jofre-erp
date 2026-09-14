@@ -4,6 +4,7 @@ export const isSupabaseConfigured = Boolean(
 
 /** Si Supabase no está configurado, la app opera en modo Demo/Local de forma transparente */
 export function shouldUseDemoAuth() {
+  if (import.meta.env.PROD && isSupabaseConfigured) return false;
   return !isSupabaseConfigured;
 }
 

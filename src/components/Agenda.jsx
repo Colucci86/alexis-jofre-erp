@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   Plus, 
@@ -8,7 +8,8 @@ import {
   MapPin, 
   X, 
   ChevronLeft, 
-  ChevronRight
+  ChevronRight,
+  List
 } from 'lucide-react';
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -40,7 +41,7 @@ function getFirstDayOfMonth(year, month) {
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export default function Agenda() {
-  const { agenda, clientes, obras, tecnicos, createAgendaEvent, removeAgendaEvent } = useApp();
+  const { agenda, clientes, obras, tecnicos, tecnicosActivos, createAgendaEvent, removeAgendaEvent } = useApp();
 
   const today = new Date();
 
@@ -54,11 +55,18 @@ export default function Agenda() {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [stockError, setStockError] = useState('');
 
+  // On mobile, default to Day view for better usability
+  useEffect(() => {
+    if (window.innerWidth < 768) {
+      setViewMode('Day');
+    }
+  }, []);
+
   const defaultNewEvent = () => ({
     title: '',
     clienteId: clientes[0]?.id || '',
     obraId: '',
-    tecnicoId: tecnicos[0]?.id || '',
+    tecnicoId: tecnicosActivos[0]?.id || '',
     fecha: toLocalDateString(today),
     hora: '09:00',
     duracion: '2 hs',
@@ -156,29 +164,29 @@ export default function Agenda() {
   // ─── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
 
       {/* HEADER */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-start gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-white">Agenda</h2>
-          <p className="text-gray-400 text-sm">Organiza las visitas de presupuestación, relevamiento y jornadas de obra.</p>
+          <h2 className="text-xl sm:text-2xl font-bold text-white">Agenda</h2>
+          <p className="text-gray-400 text-xs sm:text-sm hidden sm:block">Organiza las visitas de presupuestación, relevamiento y jornadas de obra.</p>
         </div>
         <button
           onClick={() => {
             setNewEvent(defaultNewEvent());
             setIsModalOpen(true);
           }}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2.5 rounded-xl transition-colors shadow-lg shadow-blue-900/20"
+          className="flex items-center gap-1.5 sm:gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl transition-colors shadow-lg shadow-blue-900/20 text-xs sm:text-sm shrink-0"
         >
-          <Plus className="w-5 h-5" />
-          Nueva Visita
+          <Plus className="w-4 h-4" />
+          <span className="hidden sm:inline">Nueva </span>Visita
         </button>
       </div>
 
       {/* NAVIGATION BAR */}
-      <div className="flex items-center justify-between bg-[#1E293B] border border-[#334155] p-4 rounded-xl flex-wrap gap-3">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-[#1E293B] border border-[#334155] p-3 sm:p-4 rounded-xl gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {/* Prev / Next */}
           <button
             onClick={handlePrevMonth}
@@ -189,8 +197,8 @@ export default function Agenda() {
           </button>
 
           <div className="flex items-center gap-2">
-            <CalendarIcon className="w-5 h-5 text-blue-400" />
-            <h3 className="font-bold text-white text-base min-w-[160px] text-center">
+            <CalendarIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+            <h3 className="font-bold text-white text-sm sm:text-base min-w-[120px] sm:min-w-[160px] text-center">
               {MONTH_NAMES[viewMonth]} {viewYear}
             </h3>
           </div>
@@ -205,19 +213,19 @@ export default function Agenda() {
 
           <button
             onClick={handleGoToToday}
-            className="text-xs font-bold text-blue-400 hover:text-blue-300 px-3 py-1.5 rounded-lg border border-blue-500/30 hover:bg-blue-500/10 transition-colors"
+            className="text-xs font-bold text-blue-400 hover:text-blue-300 px-2 sm:px-3 py-1.5 rounded-lg border border-blue-500/30 hover:bg-blue-500/10 transition-colors"
           >
             Hoy
           </button>
         </div>
 
         {/* View toggle */}
-        <div className="flex bg-[#0F1729] p-1 rounded-lg border border-[#334155]">
+        <div className="flex bg-[#0F1729] p-1 rounded-lg border border-[#334155] self-start sm:self-auto">
           {['Month', 'Day'].map((mode) => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
-              className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
                 viewMode === mode
                   ? 'bg-blue-600 text-white'
                   : 'text-gray-400 hover:text-white'
@@ -231,17 +239,17 @@ export default function Agenda() {
 
       {/* ── MONTHLY VIEW ── */}
       {viewMode === 'Month' && (
-        <div className="bg-[#1E293B] border border-[#334155] rounded-xl overflow-hidden shadow-lg p-6">
+        <div className="bg-[#1E293B] border border-[#334155] rounded-xl overflow-hidden shadow-lg p-2 sm:p-6">
           {/* Day headers */}
-          <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-gray-400 mb-4">
+          <div className="grid grid-cols-7 gap-0.5 sm:gap-2 text-center text-[10px] sm:text-xs font-bold text-gray-400 mb-1 sm:mb-4">
             {DAY_NAMES.map(d => <div key={d}>{d}</div>)}
           </div>
 
           {/* Calendar grid */}
-          <div className="grid grid-cols-7 gap-2" style={{ minHeight: '340px' }}>
+          <div className="grid grid-cols-7 gap-0.5 sm:gap-2" style={{ minHeight: '280px' }}>
             {/* Empty cells before first day */}
             {Array.from({ length: startDayOffset }).map((_, idx) => (
-              <div key={`offset-${idx}`} className="bg-[#111827]/20 rounded-lg border border-transparent" />
+              <div key={`offset-${idx}`} className="bg-[#111827]/20 rounded border border-transparent" />
             ))}
 
             {/* Day cells */}
@@ -255,16 +263,16 @@ export default function Agenda() {
                 <div
                   key={dayNum}
                   onClick={() => handleDayClick(dayNum)}
-                  className={`bg-[#111827]/40 hover:bg-[#16223F]/40 border rounded-lg p-2 flex flex-col gap-1 transition-colors cursor-pointer ${
+                  className={`bg-[#111827]/40 hover:bg-[#16223F]/40 border rounded p-0.5 sm:p-2 flex flex-col gap-0.5 transition-colors cursor-pointer ${
                     isToday
                       ? 'border-blue-500 shadow-md shadow-blue-900/10 bg-[#16223F]/20'
                       : 'border-[#334155]'
                   }`}
                 >
-                  <span className={`text-xs font-bold ${isToday ? 'text-blue-400' : 'text-gray-400'}`}>
+                  <span className={`text-[10px] sm:text-xs font-bold ${isToday ? 'text-blue-400' : 'text-gray-400'}`}>
                     {dayNum}
                   </span>
-                  <div className="space-y-0.5">
+                  <div className="space-y-0.5 hidden sm:block">
                     {dayEvents.slice(0, 2).map((ev) => (
                       <div
                         key={ev.id}
@@ -280,6 +288,12 @@ export default function Agenda() {
                       </div>
                     )}
                   </div>
+                  {/* On mobile: just show a dot for days with events */}
+                  {dayEvents.length > 0 && (
+                    <div className="sm:hidden flex justify-center mt-0.5">
+                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -412,20 +426,20 @@ export default function Agenda() {
 
       {/* ── CREATE EVENT MODAL ── */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-[#1E293B] border border-[#334155] rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 border-b border-[#334155] flex justify-between items-center bg-[#111827]/40">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+          <div className="bg-[#1E293B] border border-[#334155] rounded-t-2xl sm:rounded-2xl w-full sm:max-w-xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:fade-in sm:zoom-in-95 duration-200">
+            <div className="p-4 sm:p-6 border-b border-[#334155] flex justify-between items-center bg-[#111827]/40">
               <div>
-                <h3 className="font-bold text-white text-base">Programar Nueva Visita</h3>
-                <p className="text-xs text-gray-400">Registra una visita para presupuesto o inicio de obra</p>
+                <h3 className="font-bold text-white text-sm sm:text-base">Programar Nueva Visita</h3>
+                <p className="text-xs text-gray-400 hidden sm:block">Registra una visita para presupuesto o inicio de obra</p>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white p-1 rounded-lg">
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white p-2 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateEvent} className="p-6 space-y-4 text-xs">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form onSubmit={handleCreateEvent} className="p-4 sm:p-6 space-y-3 sm:space-y-4 text-xs overflow-y-auto max-h-[75vh] sm:max-h-[80vh]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
 
                 <div>
                   <label className="block text-gray-400 font-semibold mb-1">Título de Visita *</label>
@@ -476,7 +490,7 @@ export default function Agenda() {
                     className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-white focus:outline-none"
                   >
                     <option value="">Ninguno / Alexis</option>
-                    {tecnicos.map(t => (
+                    {tecnicosActivos.map(t => (
                       <option key={t.id} value={t.id}>{t.nombre} {t.apellido}</option>
                     ))}
                   </select>
