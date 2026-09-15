@@ -544,9 +544,12 @@ export const AppProvider = ({ children }) => {
 
   const savePresupuesto = async (payload, editingId) => {
     if (remote) {
+      const toSave = editingId
+        ? { ...payload, numero: payload.numero || presupuestos.find(p => p.id === editingId)?.numero }
+        : { ...payload, numero: payload.numero || (Math.max(0, ...presupuestos.map(p => parseInt(p.numero, 10) || 0)) + 1).toString().padStart(5, '0') };
       const saved = editingId
-        ? await presupuestosApi.updatePresupuesto(editingId, payload)
-        : await presupuestosApi.createPresupuesto(payload);
+        ? await presupuestosApi.updatePresupuesto(editingId, toSave)
+        : await presupuestosApi.createPresupuesto(toSave);
       await loadRemote();
       return saved;
     }
