@@ -1,7 +1,7 @@
 import { getSupabaseOrThrow } from '../lib/supabase';
 import { handleSupabaseError } from './errors';
 import {
-  mapObraRow, mapObraToDb, mapBitacoraRow, mapObraMaterialRow, mapCobroAsPagoRow,
+  mapObraRow, mapObraToDb, mapObraMaterialRow, mapCobroAsPagoRow,
 } from './mappers';
 
 async function fetchObraRelations(obraIds) {
@@ -37,7 +37,7 @@ async function fetchObraRelations(obraIds) {
   const bitacora = new Map();
   (bitRes.data || []).forEach(row => {
     if (!bitacora.has(row.entidad_id)) bitacora.set(row.entidad_id, []);
-    bitacora.get(row.entidad_id).push(mapBitacoraRow(row));
+    bitacora.get(row.entidad_id).push(row);
   });
 
   return { materiales, pagos, bitacora };

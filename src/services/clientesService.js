@@ -1,7 +1,7 @@
 import { getSupabaseOrThrow } from '../lib/supabase';
 import { handleSupabaseError } from './errors';
 import {
-  mapClienteRow, mapClienteToDb, mapBitacoraRow,
+  mapClienteRow, mapClienteToDb,
 } from './mappers';
 
 async function fetchBitacoraForEntities(entidadTipo, ids) {
@@ -20,7 +20,7 @@ async function fetchBitacoraForEntities(entidadTipo, ids) {
   const map = new Map();
   (data || []).forEach(row => {
     if (!map.has(row.entidad_id)) map.set(row.entidad_id, []);
-    map.get(row.entidad_id).push(mapBitacoraRow(row));
+    map.get(row.entidad_id).push(row);
   });
   return map;
 }
