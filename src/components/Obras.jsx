@@ -19,8 +19,10 @@ import {
   X,
   AlertCircle,
   Trash2,
-  Pencil
+  Pencil,
+  Upload
 } from 'lucide-react';
+import { subirFotoBitacora } from '../services/fotoService';
 
 /** Devuelve la cadena YYYY-MM-DD de una fecha local (sin conversión UTC) */
 function toLocalDateString(date = new Date()) {
@@ -83,6 +85,27 @@ export default function Obras() {
   // Edit existing bitacora entry state
   const [editingEntryId, setEditingEntryId] = useState(null);
   const [editEntryData, setEditEntryData] = useState({ fecha: '', hora: '' });
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+  const [fotoError, setFotoError] = useState('');
+
+  const handleFotoManual = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setFotoError('');
+    setSubiendoFoto(true);
+    try {
+      const url = await subirFotoBitacora(file, {
+        entidadTipo: 'obra',
+        entidadId: selectedObra?.id,
+      });
+      setManualFoto(url);
+    } catch (err) {
+      setFotoError(err.message || 'No se pudo subir la foto.');
+    } finally {
+      setSubiendoFoto(false);
+    }
+  };
 
   // Keep selectedObra synced with obras state
   useEffect(() => {
@@ -621,14 +644,44 @@ export default function Obras() {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[10px] font-semibold text-gray-400 mb-1">Foto / Adjunto (URL)</label>
+                      <label className="block text-[10px] font-semibold text-gray-400 mb-1">Foto / Adjunto (opcional)</label>
+                      <div className="flex items-center gap-2">
+                        <label className={`flex items-center justify-center gap-2 flex-1 bg-[#0F1729] hover:bg-[#16223F] border border-[#334155] text-white font-semibold py-2 rounded-lg text-xs transition-colors cursor-pointer ${subiendoFoto ? 'opacity-60 pointer-events-none' : ''}`}>
+                          <Upload className="w-3.5 h-3.5 text-blue-400" />
+                          {subiendoFoto ? 'Subiendo...' : (manualFoto ? 'Cambiar foto' : 'Subir foto')}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleFotoManual}
+                          />
+                        </label>
+                        {manualFoto && (
+                          <button
+                            type="button"
+                            onClick={() => { setManualFoto(''); setFotoError(''); }}
+                            title="Quitar foto"
+                            className="p-2 text-gray-400 hover:text-red-400"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                       <input
-                        type="url"
-                        placeholder="https://... (opcional)"
+                        type="text"
+                        placeholder="…o pegá un link (https://...)"
                         value={manualFoto}
                         onChange={(e) => setManualFoto(e.target.value)}
-                        className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-xs text-white focus:outline-none"
+                        className="mt-2 w-full bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-xs text-white focus:outline-none"
                       />
+                      {fotoError && <p className="mt-1 text-[10px] text-red-400">{fotoError}</p>}
+                      {manualFoto && !fotoError && (
+                        <img
+                          src={manualFoto}
+                          alt="Vista previa"
+                          className="mt-2 max-h-32 rounded-lg border border-[#334155] object-cover"
+                        />
+                      )}
                     </div>
                   </form>
 

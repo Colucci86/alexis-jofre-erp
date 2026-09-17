@@ -17,8 +17,10 @@ import {
   BookOpen,
   Send,
   Pencil,
-  Calendar
+  Calendar,
+  Upload
 } from 'lucide-react';
+import { subirFotoBitacora } from '../services/fotoService';
 
 /** Devuelve la cadena YYYY-MM-DD de una fecha local (sin conversión UTC) */
 function toLocalDateString(date = new Date()) {
@@ -72,6 +74,27 @@ export default function Clientes() {
   // Edit existing bitacora entry state
   const [editingBitacoraId, setEditingBitacoraId] = useState(null);
   const [editBitacoraData, setEditBitacoraData] = useState({ fecha: '', hora: '' });
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+  const [fotoError, setFotoError] = useState('');
+
+  const handleFotoBitacora = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setFotoError('');
+    setSubiendoFoto(true);
+    try {
+      const url = await subirFotoBitacora(file, {
+        entidadTipo: 'cliente',
+        entidadId: selectedCliente?.id,
+      });
+      setNewBitacoraEntry(prev => ({ ...prev, fotoUrl: url }));
+    } catch (err) {
+      setFotoError(err.message || 'No se pudo subir la foto.');
+    } finally {
+      setSubiendoFoto(false);
+    }
+  };
 
   useEffect(() => {
     if (!selectedCliente) return;
@@ -534,14 +557,44 @@ export default function Clientes() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[11px] font-semibold text-gray-400 mb-1">Adjunto Opcional (URL / Archivo)</label>
+                        <label className="block text-[11px] font-semibold text-gray-400 mb-1">Foto / Adjunto (opcional)</label>
+                        <div className="flex items-center gap-2">
+                          <label className={`flex items-center justify-center gap-2 flex-1 bg-[#0F1729] hover:bg-[#16223F] border border-[#334155] text-white font-semibold py-2 rounded-lg text-xs transition-colors cursor-pointer ${subiendoFoto ? 'opacity-60 pointer-events-none' : ''}`}>
+                            <Upload className="w-3.5 h-3.5 text-blue-400" />
+                            {subiendoFoto ? 'Subiendo...' : (newBitacoraEntry.fotoUrl ? 'Cambiar foto' : 'Subir foto')}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={handleFotoBitacora}
+                            />
+                          </label>
+                          {newBitacoraEntry.fotoUrl && (
+                            <button
+                              type="button"
+                              onClick={() => { setNewBitacoraEntry(prev => ({ ...prev, fotoUrl: '' })); setFotoError(''); }}
+                              title="Quitar foto"
+                              className="p-2 text-gray-400 hover:text-red-400"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                         <input
                           type="text"
-                          placeholder="Link de foto o documento..."
+                          placeholder="…o pegá un link (https://...)"
                           value={newBitacoraEntry.fotoUrl}
                           onChange={(e) => setNewBitacoraEntry(prev => ({ ...prev, fotoUrl: e.target.value }))}
-                          className="w-full bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
+                          className="mt-2 w-full bg-[#0F1729] border border-[#334155] rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
                         />
+                        {fotoError && <p className="mt-1 text-[11px] text-red-400">{fotoError}</p>}
+                        {newBitacoraEntry.fotoUrl && !fotoError && (
+                          <img
+                            src={newBitacoraEntry.fotoUrl}
+                            alt="Vista previa"
+                            className="mt-2 max-h-32 rounded-lg border border-[#334155] object-cover"
+                          />
+                        )}
                       </div>
                     </div>
 
