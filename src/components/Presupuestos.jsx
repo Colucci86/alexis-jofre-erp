@@ -25,6 +25,44 @@ import {
 } from 'lucide-react';
 
 const ESTADOS_PRESUPUESTO = ['Borrador', 'Pendiente', 'Enviado', 'Aceptado', 'Rechazado', 'Vencido', 'Convertido en obra'];
+const MAX_ITEMS_MENSAJE = 20;
+
+const formatMoneda = (valor) => `$${Number(valor || 0).toLocaleString('es-AR')}`;
+
+/** Arma el texto del presupuesto para WhatsApp con el detalle completo del trabajo. */
+function buildMensajePresupuesto(pres, cli, config) {
+  const fecha = pres.fecha ? new Date(pres.fecha).toLocaleDateString('es-AR') : null;
+  const todosLosItems = pres.items || [];
+  const items = todosLosItems.map(
+    item => `• ${item.cantidad} x ${item.descripcion} — ${formatMoneda(item.total)}`
+  );
+  const detalle = items.length > MAX_ITEMS_MENSAJE
+    ? items.slice(0, MAX_ITEMS_MENSAJE).join('\n') +
+      `\n• …y ${todosLosItems.length - MAX_ITEMS_MENSAJE} ítem/s más (ver cotización completa)`
+    : items.join('\n');
+
+  const tieneDesglose = (pres.desgloseEfectivo || 0) > 0 || (pres.desgloseCanje || 0) > 0;
+
+  return [
+    `Hola ${cli.nombre}, te escribo de ${config.titular} (Mantenimiento Integral) con la cotización del trabajo de *${pres.tipoTrabajo}*.`,
+    '',
+    `*Presupuesto N° ${pres.numero}*`,
+    fecha ? `Fecha: ${fecha}` : null,
+    pres.validez ? `Válido por: ${pres.validez}` : null,
+    '',
+    'Detalle del trabajo:',
+    detalle || '• Sin ítems cargados',
+    '',
+    `*TOTAL: ${formatMoneda(pres.subtotal)}*`,
+    tieneDesglose ? 'Forma de pago:' : null,
+    (pres.desgloseEfectivo || 0) > 0 ? `• Efectivo: ${formatMoneda(pres.desgloseEfectivo)}` : null,
+    (pres.desgloseCanje || 0) > 0 ? `• Canje: ${formatMoneda(pres.desgloseCanje)}` : null,
+    pres.observaciones ? `\n_${pres.observaciones}_` : null,
+    '',
+    `Te adjunto la cotización en PDF (N° ${pres.numero}). Si está de acuerdo, confirmame y coordinamos la fecha de arranque.`,
+    `¡Gracias! ${config.titular}${config.telefono ? ` — ${config.telefono}` : ''}`,
+  ].filter(linea => linea !== null).join('\n');
+}
 
 export default function Presupuestos() {
   const { 
@@ -236,8 +274,11 @@ export default function Presupuestos() {
 
   const handleSendWhatsApp = (pres) => {
     const cli = clientes.find(c => c.id === pres.clienteId);
-    if (!cli || !cli.whatsapp) return;
-    const message = `Hola ${cli.nombre}, te adjunto la cotización correspondiente al servicio de ${pres.tipoTrabajo} por un total de $${pres.subtotal.toLocaleString('es-AR')}. Saludos, Alexis Jofré Mantenimiento Integral.`;
+    if (!cli || !cli.whatsapp) {
+      alert('El cliente no tiene un número de WhatsApp cargado.');
+      return;
+    }
+    const message = buildMensajePresupuesto(pres, cli, config);
     window.open(`https://wa.me/${cli.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
