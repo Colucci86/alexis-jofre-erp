@@ -29,13 +29,22 @@ const ESTADOS_PRESUPUESTO = ['Borrador', 'Pendiente', 'Enviado', 'Aceptado', 'Re
 
 /** Detecta si el navegador permite compartir archivos (celulares: abre la hoja nativa con WhatsApp). */
 function detectarCompartirArchivos() {
-  if (typeof navigator === 'undefined' || typeof navigator.canShare !== 'function') return false;
+  if (typeof navigator === 'undefined') return false;
+  if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return false;
   try {
     const prueba = new File([new Blob(['x'], { type: 'application/pdf' })], 'prueba.pdf', { type: 'application/pdf' });
     return navigator.canShare({ files: [prueba] });
   } catch {
     return false;
   }
+}
+
+/** Si la hoja nativa de compartir nunca resuelve, caemos al flujo de descarga + wa.me. */
+function compartirConTimeout(datos, ms = 60000) {
+  return Promise.race([
+    Promise.resolve(navigator.share(datos)).then(() => 'compartido'),
+    new Promise(resolve => setTimeout(() => resolve('timeout'), ms)),
+  ]);
 }
 
 const formatMoneda = (valor) => `$${Number(valor || 0).toLocaleString('es-AR')}`;
@@ -295,8 +304,12 @@ export default function Presupuestos() {
       if (puedeCompartirArchivos) {
         const archivo = new File([blob], fileName, { type: 'application/pdf' });
         try {
-          await navigator.share({ files: [archivo], title: `Presupuesto N° ${pres.numero}`, text: mensaje });
-          return;
+          const resultado = await compartirConTimeout({
+            files: [archivo],
+            title: `Presupuesto N° ${pres.numero}`,
+            text: mensaje,
+          });
+          if (resultado === 'compartido') return;
         } catch (err) {
           if (err?.name === 'AbortError') return; // el usuario canceló la hoja de compartir
         }
