@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { generatePresupuestoPDF } from '../utils/pdfGenerator';
+import { buildPresupuestoPdf, descargarBlob, generatePresupuestoPDF } from '../utils/pdfGenerator';
 import { generateId } from '../utils/id';
 import { TIPOS_TRABAJO } from '../utils/categorias';
+import PresupuestoDocumento from './presupuesto/PresupuestoDocumento';
 import { 
   Plus, 
   Search, 
@@ -25,43 +26,28 @@ import {
 } from 'lucide-react';
 
 const ESTADOS_PRESUPUESTO = ['Borrador', 'Pendiente', 'Enviado', 'Aceptado', 'Rechazado', 'Vencido', 'Convertido en obra'];
-const MAX_ITEMS_MENSAJE = 20;
+
+/** Detecta si el navegador permite compartir archivos (celulares: abre la hoja nativa con WhatsApp). */
+function detectarCompartirArchivos() {
+  if (typeof navigator === 'undefined' || typeof navigator.canShare !== 'function') return false;
+  try {
+    const prueba = new File([new Blob(['x'], { type: 'application/pdf' })], 'prueba.pdf', { type: 'application/pdf' });
+    return navigator.canShare({ files: [prueba] });
+  } catch {
+    return false;
+  }
+}
 
 const formatMoneda = (valor) => `$${Number(valor || 0).toLocaleString('es-AR')}`;
 
-/** Arma el texto del presupuesto para WhatsApp con el detalle completo del trabajo. */
+/** Mensaje breve que acompaña al PDF: el detalle va dentro del archivo. */
 function buildMensajePresupuesto(pres, cli, config) {
-  const fecha = pres.fecha ? new Date(pres.fecha).toLocaleDateString('es-AR') : null;
-  const todosLosItems = pres.items || [];
-  const items = todosLosItems.map(
-    item => `• ${item.cantidad} x ${item.descripcion} — ${formatMoneda(item.total)}`
-  );
-  const detalle = items.length > MAX_ITEMS_MENSAJE
-    ? items.slice(0, MAX_ITEMS_MENSAJE).join('\n') +
-      `\n• …y ${todosLosItems.length - MAX_ITEMS_MENSAJE} ítem/s más (ver cotización completa)`
-    : items.join('\n');
-
-  const tieneDesglose = (pres.desgloseEfectivo || 0) > 0 || (pres.desgloseCanje || 0) > 0;
-
   return [
-    `Hola ${cli.nombre}, te escribo de ${config.titular} (Mantenimiento Integral) con la cotización del trabajo de *${pres.tipoTrabajo}*.`,
+    `Hola ${cli.nombre}, te adjunto el presupuesto N° ${pres.numero} de ${config.titular}.`,
+    `Total: ${formatMoneda(pres.subtotal)}`,
     '',
-    `*Presupuesto N° ${pres.numero}*`,
-    fecha ? `Fecha: ${fecha}` : null,
-    pres.validez ? `Válido por: ${pres.validez}` : null,
-    '',
-    'Detalle del trabajo:',
-    detalle || '• Sin ítems cargados',
-    '',
-    `*TOTAL: ${formatMoneda(pres.subtotal)}*`,
-    tieneDesglose ? 'Forma de pago:' : null,
-    (pres.desgloseEfectivo || 0) > 0 ? `• Efectivo: ${formatMoneda(pres.desgloseEfectivo)}` : null,
-    (pres.desgloseCanje || 0) > 0 ? `• Canje: ${formatMoneda(pres.desgloseCanje)}` : null,
-    pres.observaciones ? `\n_${pres.observaciones}_` : null,
-    '',
-    `Te adjunto la cotización en PDF (N° ${pres.numero}). Si está de acuerdo, confirmame y coordinamos la fecha de arranque.`,
-    `¡Gracias! ${config.titular}${config.telefono ? ` — ${config.telefono}` : ''}`,
-  ].filter(linea => linea !== null).join('\n');
+    '¡Gracias!',
+  ].join('\n');
 }
 
 export default function Presupuestos() {
@@ -79,6 +65,9 @@ export default function Presupuestos() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todos');
   const [selectedPresupuesto, setSelectedPresupuesto] = useState(null);
+  const [enviandoWhatsApp, setEnviandoWhatsApp] = useState(false);
+  const [puedeCompartirArchivos] = useState(detectarCompartirArchivos);
+  const pdfCacheRef = useRef(null);
   
   // Creation/editing flow states
   const [isCreating, setIsCreating] = useState(false);
@@ -101,6 +90,25 @@ export default function Presupuestos() {
   const [estadoEdit, setEstadoEdit] = useState('Pendiente');
 
   // ─── Handlers ────────────────────────────────────────────────────────────
+
+  /** Reusa el PDF ya generado para el presupuesto visible; si no existe, lo genera. */
+  const obtenerPdfPresupuesto = async (pres) => {
+    if (pdfCacheRef.current?.id === pres.id) return pdfCacheRef.current.pdf;
+    const pdf = await buildPresupuestoPdf(pres, 'printable-presupuesto');
+    pdfCacheRef.current = { id: pres.id, pdf };
+    return pdf;
+  };
+
+  // Precarga el PDF en los celulares para que compartir sea un solo toque.
+  useEffect(() => {
+    pdfCacheRef.current = null;
+    if (!puedeCompartirArchivos || !selectedPresupuesto) return;
+    let vigente = true;
+    buildPresupuestoPdf(selectedPresupuesto, 'printable-presupuesto')
+      .then(pdf => { if (vigente) pdfCacheRef.current = { id: selectedPresupuesto.id, pdf }; })
+      .catch(() => {});
+    return () => { vigente = false; };
+  }, [selectedPresupuesto, puedeCompartirArchivos]);
 
   const resetForm = () => {
     setStep(1);
@@ -272,14 +280,37 @@ export default function Presupuestos() {
 
   const handlePrint = () => window.print();
 
-  const handleSendWhatsApp = (pres) => {
+  const handleSendWhatsApp = async (pres) => {
     const cli = clientes.find(c => c.id === pres.clienteId);
     if (!cli || !cli.whatsapp) {
       alert('El cliente no tiene un número de WhatsApp cargado.');
       return;
     }
-    const message = buildMensajePresupuesto(pres, cli, config);
-    window.open(`https://wa.me/${cli.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
+
+    setEnviandoWhatsApp(true);
+    try {
+      const mensaje = buildMensajePresupuesto(pres, cli, config);
+      const { blob, fileName } = await obtenerPdfPresupuesto(pres);
+
+      if (puedeCompartirArchivos) {
+        const archivo = new File([blob], fileName, { type: 'application/pdf' });
+        try {
+          await navigator.share({ files: [archivo], title: `Presupuesto N° ${pres.numero}`, text: mensaje });
+          return;
+        } catch (err) {
+          if (err?.name === 'AbortError') return; // el usuario canceló la hoja de compartir
+        }
+      }
+
+      // Sin(compartir archivos): en desktop se descarga el PDF y se abre WhatsApp para adjuntarlo.
+      descargarBlob(blob, fileName);
+      window.open(`https://wa.me/${cli.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`, '_blank');
+    } catch (err) {
+      console.error('Error enviando presupuesto por WhatsApp:', err);
+      alert('No se pudo enviar el presupuesto por WhatsApp.');
+    } finally {
+      setEnviandoWhatsApp(false);
+    }
   };
 
   const handleConvert = async (pres) => {
@@ -866,13 +897,15 @@ export default function Presupuestos() {
                         Aceptar/Convertir
                       </button>
                     )}
-                    {/* WhatsApp */}
+                    {/* WhatsApp: envía el PDF adjunto */}
                     <button
                       onClick={() => handleSendWhatsApp(selectedPresupuesto)}
-                      className="flex items-center gap-1.5 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-green-400 font-bold px-3 py-1.5 rounded-lg text-xs transition-colors border border-[#25D366]/20"
+                      disabled={enviandoWhatsApp}
+                      title="Envía el PDF adjunto por WhatsApp"
+                      className="flex items-center gap-1.5 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-green-400 font-bold px-3 py-1.5 rounded-lg text-xs transition-colors border border-[#25D366]/20 disabled:opacity-60 disabled:cursor-wait"
                     >
                       <Send className="w-3.5 h-3.5" />
-                      WhatsApp
+                      {enviandoWhatsApp ? 'Generando PDF...' : 'Enviar PDF'}
                     </button>
                     {/* Export PDF */}
                     <button
@@ -901,81 +934,17 @@ export default function Presupuestos() {
                   </div>
                 </div>
 
-                {/* Printable document */}
-                <div id="printable-presupuesto" className="bg-white text-black p-8 rounded-lg shadow-inner max-w-2xl mx-auto overflow-hidden text-xs print-card">
-                  {/* Header */}
-                  <div className="flex justify-between items-start border-b border-gray-200 pb-6 mb-6">
-                    <div>
-<img src="/logo.png" alt="Logo" className="h-32 w-auto object-contain object-center mb-1" />
-                      <p className="text-gray-500 font-medium text-[11px]">{config.ciudad}</p>
-                    </div>
-                    <div className="text-right text-gray-600 space-y-1">
-                      <p className="font-bold text-sm text-black">PRESUPUESTO</p>
-                      <p>N° {selectedPresupuesto.numero}</p>
-                      <p>Fecha: {new Date(selectedPresupuesto.fecha).toLocaleDateString('es-AR')}</p>
-                      <p>Tel: {config.telefono}</p>
-                      <p>{config.email}</p>
-                    </div>
-                  </div>
-
-                  {/* Client info */}
-                  <div className="bg-gray-50 p-4 rounded-md border border-gray-200 mb-6">
-                    <p className="font-bold text-gray-500 uppercase text-[9px] mb-2 tracking-wider">Cliente</p>
-                    <h4 className="font-bold text-black text-sm">{selectedPresupuesto.clienteNombre}</h4>
-                    <p className="text-gray-600 mt-1">
-                      {clientes.find(c => c.id === selectedPresupuesto.clienteId)?.direccion || 'Mendoza, Argentina'}
-                    </p>
-                  </div>
-
-                  {/* Items table */}
-                  <table className="w-full mb-8 text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-gray-200 bg-gray-50 text-gray-500 font-semibold text-[10px] uppercase tracking-wider">
-                        <th className="py-2.5 px-2 text-right w-16">Cantidad</th>
-                        <th className="py-2.5 px-2">Descripción</th>
-                        <th className="py-2.5 px-2 text-right w-32">Precio Unitario</th>
-                        <th className="py-2.5 px-2 text-right w-32">Subtotal</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {selectedPresupuesto.items.map((item, idx) => (
-                        <tr key={idx}>
-                          <td className="py-3 px-2 text-right font-medium text-gray-700">{item.cantidad}</td>
-                          <td className="py-3 px-2 text-gray-800 leading-normal">{item.descripcion}</td>
-                          <td className="py-3 px-2 text-right font-medium text-gray-600">${item.precioUnitario.toLocaleString('es-AR')}</td>
-                          <td className="py-3 px-2 text-right font-semibold text-black">${item.total.toLocaleString('es-AR')}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-
-                  {/* Totals breakdown */}
-                  <div className="flex justify-end mb-6">
-                    <div className="w-72 bg-gray-50 border border-gray-200 rounded-md px-4 py-3 space-y-2">
-                      <div className="flex justify-between text-sm font-semibold text-gray-600">
-                        <span>SUBTOTAL</span>
-                        <span className="font-bold text-black">${selectedPresupuesto.subtotal.toLocaleString('es-AR')}</span>
-                      </div>
-                      {selectedPresupuesto.desgloseEfectivo > 0 && (
-                        <div className="flex justify-between text-sm font-medium text-gray-600">
-                          <span>EFECTIVO</span>
-                          <span className="font-semibold text-black">${selectedPresupuesto.desgloseEfectivo.toLocaleString('es-AR')}</span>
-                        </div>
-                      )}
-                      {selectedPresupuesto.desgloseCanje > 0 && (
-                        <div className="flex justify-between text-sm font-medium text-gray-600">
-                          <span>CANJE</span>
-                          <span className="font-semibold text-black">${selectedPresupuesto.desgloseCanje.toLocaleString('es-AR')}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Terms */}
-                  <div className="border-t border-gray-200 pt-6 text-[10px] text-gray-500 leading-relaxed italic">
-                    <p className="font-semibold text-gray-700 not-italic mb-1">Notas importantes:</p>
-                    <p>{selectedPresupuesto.observaciones}</p>
-                    <p className="mt-2 text-gray-400">Cotización válida por {selectedPresupuesto.validez}. Firma: Alexis Jofré.</p>
+                {/* Documento imprimible (base del PDF) */}
+                <div className="overflow-x-auto">
+                  <div
+                    id="printable-presupuesto"
+                    className="mx-auto w-fit rounded-lg shadow-inner print-card"
+                  >
+                    <PresupuestoDocumento
+                      presupuesto={selectedPresupuesto}
+                      cliente={clientes.find(c => c.id === selectedPresupuesto.clienteId)}
+                      config={config}
+                    />
                   </div>
                 </div>
               </div>
@@ -986,73 +955,12 @@ export default function Presupuestos() {
 
       {/* PRINT-ONLY VERSION */}
       {selectedPresupuesto && (
-        <div className="hidden print-only text-black p-8 text-xs leading-normal">
-          <div className="flex justify-between items-start border-b border-gray-200 pb-6 mb-6">
-            <div>
-              <img src="/logo.png" alt="Logo" className="h-32 w-auto object-contain object-center mb-1" />
-              <p className="text-gray-500 mt-1">{config.ciudad}</p>
-            </div>
-            <div className="text-right text-gray-600 space-y-0.5">
-              <h3 className="font-bold text-sm text-black">PRESUPUESTO</h3>
-              <p>N° {selectedPresupuesto.numero}</p>
-              <p>Fecha: {new Date(selectedPresupuesto.fecha).toLocaleDateString('es-AR')}</p>
-              <p>Tel: {config.telefono}</p>
-              <p>{config.email}</p>
-            </div>
-          </div>
-
-          <div className="bg-gray-50 border border-gray-200 rounded-md p-4 mb-6">
-            <p className="font-bold text-gray-500 uppercase text-[9px] mb-1.5 tracking-wider">Cliente</p>
-            <h4 className="font-bold text-black text-sm">{selectedPresupuesto.clienteNombre}</h4>
-            <p className="text-gray-600 mt-1">{clientes.find(c => c.id === selectedPresupuesto.clienteId)?.direccion || ''}</p>
-          </div>
-
-          <table className="w-full mb-8 text-left border-collapse">
-            <thead>
-              <tr className="border-b border-gray-200 bg-gray-50 text-gray-500 font-semibold text-[10px] uppercase tracking-wider">
-                <th className="py-2.5 px-2 text-right w-16">Cantidad</th>
-                <th className="py-2.5 px-2">Descripción</th>
-                <th className="py-2.5 px-2 text-right w-32">Precio Unitario</th>
-                <th className="py-2.5 px-2 text-right w-32">Subtotal</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {selectedPresupuesto.items.map((item, idx) => (
-                <tr key={idx}>
-                  <td className="py-3 px-2 text-right font-medium text-gray-700">{item.cantidad}</td>
-                  <td className="py-3 px-2 text-gray-800">{item.descripcion}</td>
-                  <td className="py-3 px-2 text-right font-medium text-gray-600">${item.precioUnitario.toLocaleString('es-AR')}</td>
-                  <td className="py-3 px-2 text-right font-semibold text-black">${item.total.toLocaleString('es-AR')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="flex justify-end mb-8">
-            <div className="w-72 bg-gray-50 border border-gray-200 rounded-md px-4 py-3 space-y-2">
-              <div className="flex justify-between text-sm font-semibold text-gray-600">
-                <span>SUBTOTAL</span>
-                <span className="font-bold text-black">${selectedPresupuesto.subtotal.toLocaleString('es-AR')}</span>
-              </div>
-              {selectedPresupuesto.desgloseEfectivo > 0 && (
-                <div className="flex justify-between text-sm font-medium text-gray-600">
-                  <span>EFECTIVO</span>
-                  <span className="font-semibold text-black">${selectedPresupuesto.desgloseEfectivo.toLocaleString('es-AR')}</span>
-                </div>
-              )}
-              {selectedPresupuesto.desgloseCanje > 0 && (
-                <div className="flex justify-between text-sm font-medium text-gray-600">
-                  <span>CANJE</span>
-                  <span className="font-semibold text-black">${selectedPresupuesto.desgloseCanje.toLocaleString('es-AR')}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="italic text-gray-500 border-t border-gray-200 pt-4 text-[10px] leading-relaxed">
-            <p className="font-semibold text-gray-700 not-italic mb-1">Condiciones de pago:</p>
-            <p>{selectedPresupuesto.observaciones}</p>
-          </div>
+        <div className="hidden print-only">
+          <PresupuestoDocumento
+            presupuesto={selectedPresupuesto}
+            cliente={clientes.find(c => c.id === selectedPresupuesto.clienteId)}
+            config={config}
+          />
         </div>
       )}
 
