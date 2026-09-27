@@ -5,6 +5,36 @@ import { mapPlanoRow, mapPuntoRow, mapEventoRow, mapPuntoToDb } from './mappers'
 const BUCKET = 'obra-planos';
 const MAX_BYTES = 25 * 1024 * 1024;
 const LOCAL_KEY = 'aj_obra_planos';
+const SOLO_LOCAL_KEY = 'aj_planos_solo_local';
+
+/**
+ * Si el proyecto todavía no tiene la migración 012 (tablas + bucket), la app
+ * sigue siendo usable guardando el plano en el dispositivo en vez de fallar.
+ */
+let soloLocal = (() => {
+  try { return localStorage.getItem(SOLO_LOCAL_KEY) === '1'; } catch { return false; }
+})();
+
+export function planosEnLocal() {
+  return soloLocal;
+}
+
+function marcarSoloLocal(valor) {
+  soloLocal = !!valor;
+  try { localStorage.setItem(SOLO_LOCAL_KEY, soloLocal ? '1' : '0'); } catch { /* ignorar */ }
+}
+
+/** Falta la migración 012 en el servidor. */
+function esFaltaDeInfra(error) {
+  const msg = String(error?.message || '');
+  const code = error?.code || '';
+  return /bucket not found/i.test(msg)
+    || /schema cache/i.test(msg)
+    || /relation .* does not exist/i.test(msg)
+    || code === '42P01'
+    || code === 'PGRST205'
+    || (code === '404' && /storage|not found/i.test(msg));
+}
 
 function extensionFor(file) {
   const fromName = file.name && file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : '';
@@ -21,7 +51,7 @@ function readAsDataUrl(file) {
 }
 
 function useLocal() {
-  return !isSupabaseConfigured || !supabase;
+  return !isSupabaseConfigured || !supabase || soloLocal;
 }
 
 function readLocal() {
@@ -53,26 +83,7 @@ export async function guardarPlanoObra(obraId, file, { paginas = 1, usuarioId = 
 
   const nombre = (file.name || 'plano.pdf').trim();
 
-  if (useLocal()) {
-    const archivoUrl = await readAsDataUrl(file);
-    const data = readLocal();
-    const previo = data[obraId];
-      const plano = {
-      id: previo?.id || genId(),
-      obraId,
-      nombre,
-      archivoPath: `local/${obraId}/${nombre}`,
-      archivoUrl,
-      tamanoBytes: file.size,
-      paginas,
-      puntos: previo?.puntos || [],
-      eventos: previo?.eventos || [],
-      createdAt: new Date().toISOString(),
-    };
-    data[obraId] = plano;
-    writeLocal(data);
-    return plano;
-  }
+  if (useLocal()) return guardarPlanoLocal(obraId, file, nombre, paginas);
 
   const supabaseClient = getSupabaseOrThrow();
   const path = `${obraId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extensionFor(file)}`;
@@ -83,17 +94,18 @@ export async function guardarPlanoObra(obraId, file, { paginas = 1, usuarioId = 
     contentType: 'application/pdf',
   });
   if (upErr) {
-    const msg = String(upErr.message || '');
-    if (/bucket not found/i.test(msg)) {
-      throw new Error('Falta crear el bucket "obra-planos" en Supabase (migración 012).');
+    if (esFaltaDeInfra(upErr)) {
+      marcarSoloLocal(true);
+      return guardarPlanoLocal(obraId, file, nombre, paginas);
     }
+    const msg = String(upErr.message || '');
     if (/exceeded the maximum allowed size/i.test(msg)) {
       throw new Error('El PDF supera el tamaño máximo permitido (25 MB).');
     }
     throw new Error(upErr.message || 'No se pudo subir el PDF.');
   }
 
-  const { data: urlData } = supabaseClient.storage.from(BUCKET).getPublicUrl(path);
+  const { urlData } = supabaseClient.storage.from(BUCKET).getPublicUrl(path);
   const registro = {
     obra_id: obraId,
     nombre,
@@ -109,18 +121,39 @@ export async function guardarPlanoObra(obraId, file, { paginas = 1, usuarioId = 
     .upsert(registro, { onConflict: 'obra_id' })
     .select('*')
     .single();
+  if (esFaltaDeInfra(error)) {
+    marcarSoloLocal(true);
+    return guardarPlanoLocal(obraId, file, nombre, paginas);
+  }
   const serviceError = handleSupabaseError(error);
   if (serviceError) throw serviceError;
 
   return mapPlanoRow(data);
 }
 
+async function guardarPlanoLocal(obraId, file, nombre, paginas) {
+  const archivoUrl = await readAsDataUrl(file);
+  const data = readLocal();
+  const previo = data[obraId];
+  const plano = {
+    id: previo?.id || genId(),
+    obraId,
+    nombre,
+    archivoPath: `local/${obraId}/${nombre}`,
+    archivoUrl,
+    tamanoBytes: file.size,
+    paginas,
+    puntos: previo?.puntos || [],
+    eventos: previo?.eventos || [],
+    createdAt: new Date().toISOString(),
+  };
+  data[obraId] = plano;
+  writeLocal(data);
+  return plano;
+}
+
 export async function fetchPlanoObra(obraId) {
-  if (useLocal()) {
-    const local = readLocal()[obraId];
-    if (!local) return null;
-    return { ...local, puntos: local.puntos || [], eventos: local.eventos || [] };
-  }
+  if (!isSupabaseConfigured || !supabase) return leerPlanoLocal(obraId);
 
   const supabaseClient = getSupabaseOrThrow();
   const { data, error } = await supabaseClient
@@ -129,13 +162,22 @@ export async function fetchPlanoObra(obraId) {
     .eq('obra_id', obraId)
     .maybeSingle();
   if (error) {
-    // La migración 012 todavía no está aplicada: la pestaña no muestra plano.
-    if (error.code === '42P01' || error.code === 'PGRST205') return null;
+    // Sin migración 012 en el servidor: se usa lo guardado en el dispositivo.
+    if (esFaltaDeInfra(error)) {
+      marcarSoloLocal(true);
+      return leerPlanoLocal(obraId);
+    }
     const serviceError = handleSupabaseError(error);
     if (serviceError) throw serviceError;
     return null;
   }
-  if (!data) return null;
+  if (!data) {
+    if (soloLocal) return leerPlanoLocal(obraId);
+    return null;
+  }
+
+  // El servidor ya tiene la migración: se olvida el modo local.
+  marcarSoloLocal(false);
 
   const plano = mapPlanoRow(data);
   const [puntosRes, eventosRes] = await Promise.all([
@@ -149,13 +191,19 @@ export async function fetchPlanoObra(obraId) {
   ]);
 
   const puntosErr = handleSupabaseError(puntosRes.error);
-  if (puntosErr && puntosRes.error?.code !== '42P01' && puntosRes.error?.code !== 'PGRST205') throw puntosErr;
+  if (puntosErr && !esFaltaDeInfra(puntosRes.error)) throw puntosErr;
 
   return {
     ...plano,
     puntos: (puntosRes.data || []).map(mapPuntoRow),
     eventos: (eventosRes.data || []).map(mapEventoRow),
   };
+}
+
+function leerPlanoLocal(obraId) {
+  const local = readLocal()[obraId];
+  if (!local) return null;
+  return { ...local, puntos: local.puntos || [], eventos: local.eventos || [] };
 }
 
 /** Quita el plano de la obra: borra puntos, historial, fila y archivo. */

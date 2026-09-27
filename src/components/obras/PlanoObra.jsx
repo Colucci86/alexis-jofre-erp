@@ -5,10 +5,11 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import {
-  guardarPlanoObra, fetchPlanoObra, crearPunto, actualizarPunto, borrarPunto, eliminarPlanoObra,
+  guardarPlanoObra, fetchPlanoObra, crearPunto, actualizarPunto, borrarPunto, eliminarPlanoObra, planosEnLocal,
 } from '../../services/planosService';
 
 const TIPOS_PUNTO = ['Toma', 'Luminaria', 'Interruptor', 'Tablero', 'Punto de luz', 'Bocina', 'Otro'];
+const URL_EJEMPLO = '/ejemplos/SPOTTI-ELECTRICO-Model.pdf';
 const COLOR_POR_DEFECTO = '#9CA3AF';
 const GRIS_PENDIENTE = '#9CA3AF';
 
@@ -116,9 +117,7 @@ export default function PlanoObra({ obra }) {
   }, [obra.id]);
 
   // ─── Subir / reemplazar PDF ──────────────────────────────────────────────────
-  const handleSubir = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
+  const procesarArchivo = async (file) => {
     if (!file) return;
     setSubiendo(true);
     setError('');
@@ -138,6 +137,28 @@ export default function PlanoObra({ obra }) {
     } catch (err) {
       setError(err.message || 'No se pudo subir el plano.');
     } finally {
+      setSubiendo(false);
+    }
+  };
+
+  const handleSubir = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    await procesarArchivo(file);
+  };
+
+  /** Plano de ejemplo que viene con la app, para probar sin buscar el PDF. */
+  const handleEjemplo = async () => {
+    setSubiendo(true);
+    setError('');
+    try {
+      const res = await fetch(URL_EJEMPLO);
+      if (!res.ok) throw new Error('No se pudo leer el plano de ejemplo.');
+      const blob = await res.blob();
+      const nombre = decodeURIComponent(URL_EJEMPLO.split('/').pop());
+      await procesarArchivo(new File([blob], nombre, { type: 'application/pdf' }));
+    } catch (err) {
+      setError(err.message || 'No se pudo cargar el plano de ejemplo.');
       setSubiendo(false);
     }
   };
@@ -505,8 +526,24 @@ export default function PlanoObra({ obra }) {
             {subiendo ? 'Subiendo plano...' : 'Subir PDF del plano'}
             <input type="file" accept="application/pdf,.pdf" onChange={handleSubir} className="hidden" disabled={subiendo} />
           </label>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={handleEjemplo}
+              disabled={subiendo}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold text-blue-300 border border-blue-500/30 hover:bg-blue-500/10 disabled:opacity-50"
+            >
+              <FileUp className="w-3.5 h-3.5" /> Usar el plano de ejemplo
+            </button>
+          </div>
           <p className="text-[10px] text-gray-500">PDF de hasta 25 MB. Un plano por obra.</p>
         </div>
+        {planosEnLocal() && (
+          <p className="text-[10px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 leading-snug">
+            El servidor de planos todavía no está configurado (falta la migración 012 en Supabase).
+            El plano y los puntos se están guardando sólo en este dispositivo.
+          </p>
+        )}
         {error && (
           <p className="text-xs text-red-400 flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5" /> {error}</p>
         )}
@@ -518,6 +555,11 @@ export default function PlanoObra({ obra }) {
 
   return (
     <div className="flex flex-col gap-3 h-full">
+      {planosEnLocal() && (
+        <p className="text-[10px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-1.5 leading-snug shrink-0">
+          Servidor de planos sin configurar (falta la migración 012): todo se guarda sólo en este dispositivo.
+        </p>
+      )}
       {/* Plano */}
       <div className="flex-1 min-h-[260px] min-w-0 flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2 flex-wrap">
