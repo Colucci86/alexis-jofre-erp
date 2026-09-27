@@ -82,7 +82,16 @@ export async function guardarPlanoObra(obraId, file, { paginas = 1, usuarioId = 
     upsert: false,
     contentType: 'application/pdf',
   });
-  if (upErr) throw new Error(upErr.message || 'No se pudo subir el PDF.');
+  if (upErr) {
+    const msg = String(upErr.message || '');
+    if (/bucket not found/i.test(msg)) {
+      throw new Error('Falta crear el bucket "obra-planos" en Supabase (migración 012).');
+    }
+    if (/exceeded the maximum allowed size/i.test(msg)) {
+      throw new Error('El PDF supera el tamaño máximo permitido (25 MB).');
+    }
+    throw new Error(upErr.message || 'No se pudo subir el PDF.');
+  }
 
   const { data: urlData } = supabaseClient.storage.from(BUCKET).getPublicUrl(path);
   const registro = {
@@ -161,8 +170,13 @@ export async function eliminarPlanoObra(planoId, { archivoPath, obraId } = {}) {
 
   const supabaseClient = getSupabaseOrThrow();
   const { error } = await supabaseClient.from('obra_planos').delete().eq('id', planoId);
-  const serviceError = handleSupabaseError(error);
-  if (serviceError) throw serviceError;
+  if (error) {
+    if (/row-level security|permission denied/i.test(error.message)) {
+      throw new Error('Sólo un administrador puede quitar el plano de la obra.');
+    }
+    const serviceError = handleSupabaseError(error);
+    if (serviceError) throw serviceError;
+  }
 
   if (archivoPath) {
     // El bucket solo deja borrar a admins: si falla, el archivo queda huérfano.
