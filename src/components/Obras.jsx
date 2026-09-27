@@ -23,6 +23,7 @@ import {
   Upload
 } from 'lucide-react';
 import { subirFotoBitacora } from '../services/fotoService';
+import PlanoObra from './obras/PlanoObra';
 
 /** Devuelve la cadena YYYY-MM-DD de una fecha local (sin conversión UTC) */
 function toLocalDateString(date = new Date()) {
@@ -383,7 +384,9 @@ export default function Obras() {
             <p className="text-sm">Selecciona una obra del panel izquierdo para monitorear su estado, agregar insumos o registrar notas del técnico.</p>
           </div>
         ) : (
-          <div className="bg-[#1E293B] rounded-xl border border-[#334155] flex flex-col justify-between overflow-hidden shadow-lg h-full">
+          <div className={`bg-[#1E293B] rounded-xl border border-[#334155] flex flex-col justify-between shadow-lg h-full ${
+            activeSubTab === 'Plano' ? 'overflow-visible' : 'overflow-hidden'
+          }`}>
             {/* Back button on mobile */}
             <div className="lg:hidden p-3 border-b border-[#334155] bg-[#111827]/40">
               <button
@@ -449,7 +452,7 @@ export default function Obras() {
 
             {/* Inner Subtabs */}
             <div className="flex border-b border-[#334155] bg-[#111827]/20 overflow-x-auto">
-              {['Resumen', 'Materiales', 'Pagos', 'Bitácora de Progreso'].map((tab) => (
+              {['Resumen', 'Materiales', 'Pagos', 'Plano', 'Bitácora de Progreso'].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveSubTab(tab)}
@@ -465,8 +468,15 @@ export default function Obras() {
             </div>
 
             {/* Tab content panel */}
-            <div className="p-6 flex-1 overflow-y-auto max-h-[380px]">
-              
+            <div className={activeSubTab === 'Plano' ? 'p-4 sm:p-5 flex flex-col h-[78vh] lg:h-[72vh] min-h-[460px]' : 'p-6 flex-1 overflow-y-auto max-h-[380px]'}>
+
+              {/* SUBTAB: PLANO (PDF del arquitecto + tomas) */}
+              {activeSubTab === 'Plano' && (
+                <div className="flex-1 min-h-0 flex flex-col">
+                  <PlanoObra obra={selectedObra} />
+                </div>
+              )}
+
               {/* SUBTAB: RESUMEN */}
               {activeSubTab === 'Resumen' && (
                 <div className="space-y-6">

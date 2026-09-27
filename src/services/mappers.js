@@ -361,3 +361,65 @@ export function mapUsuarioRow(row, tecnicoId = null) {
     avatar: (row.nombre || row.email || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase(),
   };
 }
+
+// --- PLANO ELÉCTRICO DE LA OBRA ------------------------------------------------
+
+export function mapPlanoRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    obraId: row.obra_id,
+    nombre: row.nombre,
+    archivoPath: row.archivo_path,
+    archivoUrl: row.archivo_url,
+    tamanoBytes: row.tamano_bytes,
+    paginas: row.paginas || 1,
+    createdAt: row.created_at || null,
+  };
+}
+
+export function mapPuntoRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    planoId: row.plano_id,
+    pagina: row.pagina || 1,
+    etiqueta: row.etiqueta,
+    tipo: row.tipo || 'Toma',
+    x: Number(row.x),
+    y: Number(row.y),
+    color: row.color || '#9CA3AF',
+    hecho: Boolean(row.hecho),
+    nota: row.nota || '',
+    marcadoPor: row.marcado_por || '',
+    marcadoAt: row.marcado_at || null,
+  };
+}
+
+export function mapPuntoToDb(punto) {
+  const db = {};
+  if (punto.pagina !== undefined) db.pagina = punto.pagina;
+  if (punto.etiqueta !== undefined) db.etiqueta = punto.etiqueta;
+  if (punto.tipo !== undefined) db.tipo = punto.tipo;
+  if (punto.x !== undefined) db.x = punto.x;
+  if (punto.y !== undefined) db.y = punto.y;
+  if (punto.color !== undefined) db.color = punto.color;
+  if (punto.hecho !== undefined) db.hecho = punto.hecho;
+  if (punto.nota !== undefined) db.nota = punto.nota;
+  if (punto.marcadoPor !== undefined) db.marcado_por = punto.marcadoPor;
+  if (punto.marcadoAt !== undefined) db.marcado_at = punto.marcadoAt;
+  return db;
+}
+
+export function mapEventoRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    planoId: row.plano_id,
+    puntoId: row.punto_id,
+    accion: row.accion,
+    detalle: row.detalle || '',
+    usuario: row.usuario_nombre || 'Sistema',
+    createdAt: row.created_at || null,
+  };
+}
