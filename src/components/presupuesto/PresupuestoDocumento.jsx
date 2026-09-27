@@ -43,7 +43,7 @@ export default function PresupuestoDocumento({ presupuesto, cliente, config, cla
           {config?.telefono ? <div className="text-[#333]">Teléfono: {config.telefono}</div> : null}
           {config?.email ? <div className="text-[#333]">{config.email}</div> : null}
         </div>
-        <img src="/logo.png" alt="AJ" className="object-contain" style={{ width: '92px', height: '92px' }} />
+        <img src="/logo.png" alt="AJ" className="object-contain" style={{ width: '108px', height: '108px' }} />
       </div>
 
       {/* Título del documento y fecha */}
